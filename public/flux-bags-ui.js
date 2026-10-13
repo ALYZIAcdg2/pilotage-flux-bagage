@@ -8,13 +8,13 @@ const names=['DATE','CIE','N° VOL','HEURE DÉPART','N° TAG','VOL APPORT','HEUR
 const currentMonth=()=>$('date').value.slice(0,7);
 const allRows=()=>Object.entries(dataset).filter(([date])=>$('view').value==='month'?date.startsWith(currentMonth()+'-'):date===$('date').value).flatMap(([date,rows])=>(Array.isArray(rows)?rows:[]).map((r,index)=>({date,index,r})));
 function matchesBagSearch(r,raw){
- const q=raw.trim().toLocaleUpperCase('fr').replace(/\\s+/g,'');
+ const q=raw.trim().toLocaleUpperCase('fr').replace(/\s+/g,'');
  if(!q)return true;
- const cie=String(pick(r,...fields[0])).toLocaleUpperCase('fr').replace(/\\s+/g,'');
- const flight=String(pick(r,...fields[1])).toLocaleUpperCase('fr').replace(/\\s+/g,'');
+ const cie=String(pick(r,...fields[0])).toLocaleUpperCase('fr').replace(/\s+/g,'');
+ const flight=String(pick(r,...fields[1])).toLocaleUpperCase('fr').replace(/\s+/g,'');
  // A flight number is matched against the flight column only, never against a tag or comment.
- if(/^\\d+$/.test(q))return flight===q;
- const combined=q.match(/^([A-Z]{2,3})(\\d+)$/);
+ if(/^\d+$/.test(q))return flight===q;
+ const combined=q.match(/^([A-Z]{2,3})(\d+)$/);
  if(combined)return cie===combined[1]&&flight===combined[2];
  // Airline codes are matched to the company column, not arbitrary text fields.
  if(/^[A-Z]{2,3}$/.test(q))return cie===q;
@@ -194,7 +194,7 @@ function updateBagPrefixes(){
  const company=upper($('bagField0').value.trim()),flight=$('bagField1'),tag=$('bagField3');
  if(!company)return;
  const old=$('bagField0').dataset.previous||'';
- const apply=(input)=>{let value=upper(input.value.trim());if(old&&value.startsWith(old))value=value.slice(old.length);if(value.startsWith(company))value=value.slice(company.length);if(!value||/^\\d+$/.test(value))input.value=company+value;};
+ const apply=(input)=>{let value=upper(input.value.trim());if(old&&value.startsWith(old))value=value.slice(old.length);if(value.startsWith(company))value=value.slice(company.length);if(!value||/^\d+$/.test(value))input.value=company+value;};
  apply(flight);apply(tag);$('bagField0').dataset.previous=company;
 }
 function openBag(day=null,index=null){
@@ -214,10 +214,10 @@ function openBag(day=null,index=null){
 $('newBagButton').onclick=()=>openBag();$('bagClose').onclick=()=>$('bagDialog').close();
 $('bagForm').onsubmit=async e=>{
  e.preventDefault();const date=$('bagDate').value;
- if(!/^\\d{4}-\\d{2}-\\d{2}$/.test(date)){$('bagStatus').textContent='Date invalide';return;}
+ if(!/^\d{4}-\d{2}-\d{2}$/.test(date)){$('bagStatus').textContent='Date invalide';return;}
  const row={};fields.forEach((keys,i)=>row[keys[0]]=i===11?$('bagForm').elements['field'+i].value.trim():upper($('bagForm').elements['field'+i].value.trim()));
  if(!row.cie||!row.tagNumber){$('bagStatus').textContent='CIE et N° TAG sont obligatoires.';return;}
- for(const key of ['departureTime','arrivalTime']){if(row[key]&&!/^([01]\\d|2[0-3]):[0-5]\\d$/.test(row[key])){$('bagStatus').textContent='Heure invalide : utiliser HH:MM';return;}}
+ for(const key of ['departureTime','arrivalTime']){if(row[key]&&!/^([01]\d|2[0-3]):[0-5]\d$/.test(row[key])){$('bagStatus').textContent='Heure invalide : utiliser HH:MM';return;}}
  const previous=bagEditing?dataset[bagEditing.day]?.[bagEditing.index]:null;
  const updated={...(previous||{}),...row};
  if(previous){const changes=fields.map((keys,i)=>({field:names[i+1]||keys[0],old:String(pick(previous,...keys)),new:String(row[keys[0]]??'')})).filter(c=>c.old!==c.new);if(bagEditing.day!==date)changes.unshift({field:'DATE',old:bagEditing.day,new:date});if(changes.length)updated._history=[...(previous._history||[]),{at:new Date().toLocaleString('fr-FR'),changes}];}
