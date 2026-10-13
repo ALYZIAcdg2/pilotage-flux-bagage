@@ -62,8 +62,8 @@ export async function exportFluxExcel({dataset,metadata={},period,from,to,compan
    const cie=String(pick(r,fields[0])).toUpperCase()||'AUTRES';
    if(!grouped.has(cie))grouped.set(cie,{airline:cie,...blank()});
    for(const m of [grouped.get(cie),daily.get(date)]){m.toProcess++;m[statusKey(r)]++;}
-   const anomaly=String(pick(r,fields[9])).trim();if(anomaly)anomalies.set(anomaly,(anomalies.get(anomaly)||0)+1);
-   const loc=String(pick(r,fields[7])).trim();if(loc)locations.set(loc,(locations.get(loc)||0)+1);
+   const anomaly=String(pick(r,fields[8])).trim();if(anomaly)anomalies.set(anomaly,(anomalies.get(anomaly)||0)+1);
+   const loc=String(pick(r,fields[6])).trim();if(loc)locations.set(loc,(locations.get(loc)||0)+1);
   }
   const stored=(metadata['flux_bags_daily_summary_'+date.slice(0,7)]||{})[date]||[];
   for(const r of stored){const cie=String(r.airline||'').toUpperCase();if(!cie||(company&&company!==cie))continue;
