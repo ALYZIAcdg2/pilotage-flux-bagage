@@ -1,0 +1,12 @@
+name = "pilotage-flux-bagage-test"
+main = "worker.js"
+compatibility_date = "2026-10-13"
+
+[assets]
+directory = "./public"
+binding = "ASSETS"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "pilotage-flux-bagage-test-db"
+database_id = "e20d413a-0b67-4ab5-87a9-23b93adaef10"
