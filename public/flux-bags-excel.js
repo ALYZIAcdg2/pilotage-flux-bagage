@@ -31,7 +31,7 @@ function band(ws,row,a,b,label,color=navy){
 function hero(ws,title,scope,end){
  ws.mergeCells(1,1,2,end);const c=ws.getCell(1,1);c.value='ALYZIA  |  FLUX BAGAGES  —  '+title;c.font=font(white,20,true);c.fill=fill(navy);c.alignment={vertical:'middle',indent:1};ws.getRow(1).height=26;ws.getRow(2).height=26;
  ws.mergeCells(3,1,3,end);const sub=ws.getCell(3,1);sub.value='COMPTE RENDU DE SUPERVISION  •  '+scope+'  •  Source : PILOTAGE FLUX BAGAGE TEST';sub.font=font(muted,11);sub.alignment={vertical:'middle',indent:1};ws.getRow(3).height=26;
- ws.sheetProperties.pageSetUpPr={fitToPage:true};
+ ws.pageSetup={...ws.pageSetup,fitToPage:true,fitToWidth:1,fitToHeight:0};
 }
 function metric(ws,row,c1,c2,label,value,color=navy){
  ws.mergeCells(row,c1,row,c2);ws.mergeCells(row+1,c1,row+1,c2);
