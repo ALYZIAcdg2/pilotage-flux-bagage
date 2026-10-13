@@ -57,17 +57,25 @@ function parseWorkbook(workbook){
  if(!Object.keys(days).length)throw Error('Aucune feuille journalière (1 à 30/31) reconnue.');
  return {days,total};
 }
+// Compare complete imported rows as a multiset: identical rows may legitimately repeat.
+const rowSignature=r=>JSON.stringify(keys.map(k=>clean(r[k])));
+function missingRows(date,records,existingRows){
+ const counts=new Map();
+ for(const r of existingRows||[]){const k=rowSignature(r);counts.set(k,(counts.get(k)||0)+1);}
+ const missing=[];
+ for(const r of records){const k=rowSignature(r),count=counts.get(k)||0;
+  if(count>0)counts.set(k,count-1);else missing.push(r);
+ }
+ return missing;
+}
 function summarize(){
  if(!incoming||!existing)return;
- const old=existing.data||{},conflicts=[],newRecords=[];
- for(const [date,day] of Object.entries(incoming.days)){
-  const byTag=new Map((old[date]||[]).filter(r=>tag(r.tagNumber||r.tag||r.numeroTag)).map(r=>[identity(date,r),r]));
-  for(const r of day.records){const key=uniqueKey(date,r);if(byTag.has(key))conflicts.push({date,key,old:byTag.get(key),next:r});else newRecords.push({date,key,next:r});}
- }
- incoming.conflicts=conflicts;incoming.additions=newRecords;
- $('preview').innerHTML='<b>'+Object.keys(incoming.days).length+' journées</b> · '+incoming.total+' lignes · <b>'+conflicts.length+' correspondances existantes</b> · '+newRecords.length+' nouveaux dossiers.';
- $('conflicts').innerHTML=conflicts.length?'<h2>Doublons détectés</h2><p>Choisissez une action pour chaque dossier existant. <b>Mettre à jour</b> complète uniquement les champs renseignés dans Excel. <b>Écraser</b> remplace le dossier entier. <b>Annuler</b> ignore ce dossier.</p><label>Action par défaut <select id="defaultDecision"><option value="cancel">Annuler (sécurité)</option><option value="update">Mettre à jour</option><option value="overwrite">Écraser</option></select></label><div class="conflict-list">'+conflicts.map((c,i)=>'<div class="conflict"><strong>'+esc(c.date)+' · '+esc(c.next.cie)+' '+esc(c.next.flightNumber)+' · '+esc(c.next.tagNumber)+'</strong><select data-conflict="'+i+'"><option value="default">Action par défaut</option><option value="update">Mettre à jour</option><option value="overwrite">Écraser</option><option value="cancel">Annuler</option></select></div>').join('')+'</div>':'<p>Aucun dossier existant correspondant : seuls les nouveaux dossiers seront ajoutés.</p>';
- $('apply').disabled=false;
+ let missing=0;
+ for(const [date,day] of Object.entries(incoming.days))missing+=missingRows(date,day.records,existing.data?.[date]||[]).length;
+ incoming.missing=missing;
+ $('preview').innerHTML='<b>'+Object.keys(incoming.days).length+' journées</b> · '+incoming.total+' lignes · <b>'+missing+' lignes restant à importer</b> · '+(incoming.total-missing)+' lignes déjà présentes.';
+ $('conflicts').innerHTML='<p>Les lignes Excel sont conservées individuellement, y compris les doublons de date, compagnie et tag. Les lignes déjà importées à l’identique ne seront pas réajoutées.</p>';
+ $('apply').disabled=missing===0;
 }
 async function parseFile(file){
  $('apply').disabled=true;$('status').textContent='Lecture et comparaison…';
@@ -79,35 +87,24 @@ async function parseFile(file){
  existing=await res.json();summarize();$('status').textContent='Prévisualisation prête. Aucune donnée modifiée.';
 }
 $('file').onchange=async()=>{try{await parseFile($('file').files[0]);}catch(e){incoming=null;$('apply').disabled=true;$('status').textContent='Erreur : '+e.message;}};
-function decisionFor(i){const choice=document.querySelector('[data-conflict="'+i+'"]')?.value;return choice&&choice!=='default'?choice:$('defaultDecision')?.value||'cancel';}
 $('apply').onclick=async()=>{
  if(!incoming||!existing)return;
- if(!confirm('Confirmer l’import sur TEST ? Les dossiers non correspondants seront ajoutés. Les doublons suivront les décisions choisies.'))return;
+ if(!confirm('Importer uniquement les lignes manquantes sur TEST, en conservant tous les doublons Excel ?'))return;
  $('apply').disabled=true;
  try{
   const fresh=await fetch('/api/data',{cache:'no-store'});if(!fresh.ok)throw Error('Vérification des données : '+fresh.status);
   const live=await fresh.json();
-  // Refuse changes when database has changed since the preview to avoid stale overwrites.
   for(const date of Object.keys(incoming.days))if(JSON.stringify(live.data?.[date]||[])!==JSON.stringify(existing.data?.[date]||[]))throw Error('La journée '+date+' a changé depuis la prévisualisation. Rechargez le fichier.');
-  const decisionsByKey=new Map(incoming.conflicts.map((c,i)=>[c.key,decisionFor(i)]));
-  const updates=[];let added=0,changed=0,skipped=0;
+  const updates=[];let added=0;
   for(const [date,day] of Object.entries(incoming.days)){
-   const old=live.data?.[date]||[],list=old.map(r=>({...r})),index=new Map(list.map((r,i)=>[identity(date,r),i]));
-   for(const next of day.records){
-    const key=identity(date,next),i=index.get(key);
-    if(i===undefined){index.set(key,list.length);list.push(next);added++;continue;}
-    const action=decisionsByKey.get(key)||'cancel';
-    if(action==='cancel'){skipped++;continue;}
-    if(action==='overwrite'){list[i]={...next};changed++;continue;}
-    if(action==='update'){const patch=Object.fromEntries(Object.entries(next).filter(([,v])=>v!==''&&v!=null));list[i]={...list[i],...patch};changed++;}
-   }
-   if(JSON.stringify(old)!==JSON.stringify(list))updates.push({date,records:list});
+   const old=live.data?.[date]||[],missing=missingRows(date,day.records,old);
+   if(missing.length){updates.push({date,records:[...old,...missing]});added+=missing.length;}
   }
-  if(!updates.length){$('status').textContent='Aucun changement à enregistrer. '+skipped+' doublons ignorés.';return;}
+  if(!updates.length){$('status').textContent='Toutes les '+incoming.total+' lignes Excel sont déjà présentes. Aucune modification.';return;}
   // Add missing daily summaries/remarks, but never overwrite existing KPI or remarks.
   const metadataPatch={};for(const [date,day] of Object.entries(incoming.days)){const month=date.slice(0,7),sk='flux_bags_daily_summary_'+month,rk='flux_bags_remarks_'+month;const oldSummary=live.metadata?.[sk]||{},oldRemarks=live.metadata?.[rk]||{};if(!Object.prototype.hasOwnProperty.call(oldSummary,date)&&day.summary.length){metadataPatch[sk]={...(metadataPatch[sk]||oldSummary),[date]:day.summary};}if(!Object.prototype.hasOwnProperty.call(oldRemarks,date)&&day.remarks.length){metadataPatch[rk]={...(metadataPatch[rk]||oldRemarks),[date]:day.remarks};}}
   for(let i=0;i<updates.length;i+=2){const slice=updates.slice(i,i+2);const res=await fetch('/api/days',{method:'PUT',headers:{'content-type':'application/json'},body:JSON.stringify({days:slice,metadata:i===0?metadataPatch:{}})});if(!res.ok)throw Error('Écriture API '+res.status+' : '+(await res.text()).slice(0,180));$('status').textContent='Journées enregistrées : '+Math.min(i+2,updates.length)+' / '+updates.length;}
-  $('status').textContent='Import terminé : '+added+' ajoutés, '+changed+' modifiés, '+skipped+' doublons ignorés. Les récapitulatifs existants ont été préservés ; les récapitulatifs manquants ont été ajoutés.';
+  $('status').textContent='Import terminé : '+added+' lignes ajoutées, 0 dossier existant modifié, 0 doublon Excel supprimé. Les récapitulatifs existants ont été préservés ; les récapitulatifs manquants ont été ajoutés.';
   existing=null;incoming=null;$('apply').disabled=true;
  }catch(e){$('status').textContent='IMPORT INTERROMPU : '+e.message+' (certaines journées ont pu être enregistrées). Rechargez le fichier avant de recommencer.';}finally{if(incoming)$('apply').disabled=false;}
 };
