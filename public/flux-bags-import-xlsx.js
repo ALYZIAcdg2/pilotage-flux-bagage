@@ -39,9 +39,13 @@ function parseWorkbook(workbook){
   if(!/^\d{1,2}$/.test(sheet.name.trim()))continue;
   const date=dateFromSheet(sheet,period);if(!date)continue;
   const rows=[],summary=[],remarks=[];
-  const heading=sheet.getRow(27);
-  if(upper(heading.getCell(1).text)!=='CIE'||!upper(heading.getCell(4).text).includes('TAG'))throw Error('Colonnes inattendues, feuille '+sheet.name+' ligne 27');
-  for(let i=28;i<=sheet.rowCount;i++){
+  let headerRow=0;
+  for(let i=25;i<=Math.min(35,sheet.rowCount);i++){
+   const heading=sheet.getRow(i);
+   if(upper(heading.getCell(1).text)==='CIE'&&upper(heading.getCell(4).text).includes('TAG')){headerRow=i;break;}
+  }
+  if(!headerRow)throw Error('En-tête CIE / N° TAG introuvable, feuille '+sheet.name+' lignes 25 à 35');
+  for(let i=headerRow+1;i<=sheet.rowCount;i++){
    const r=sheet.getRow(i),values=Array.from({length:12},(_,j)=>clean(r.getCell(j+1).text));
    if(!values[0]||!values[3]||!(/^[A-Z0-9]{2,3}$/i.test(values[0])))continue;
    const obj=Object.fromEntries(keys.map((k,j)=>[k,values[j]]));obj.cie=upper(obj.cie);obj.flightNumber=flight(obj.flightNumber);obj.tagNumber=tag(obj.tagNumber);obj.fluxStatus=makeStatus(obj.fluxStatus);rows.push(obj);
