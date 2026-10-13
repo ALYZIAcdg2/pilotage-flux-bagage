@@ -228,9 +228,34 @@ function openBag(day=null,index=null){
  if(!r){$('bagField0').addEventListener('input',updateBagPrefixes);$('bagField0').addEventListener('change',updateBagPrefixes);}
  for(const i of [2,5])$('bagField'+i).addEventListener('blur',e=>{e.target.value=normalizedClock(e.target.value);});
  $('bagFields').querySelectorAll('input:not([style*="text-transform:none"])').forEach(el=>el.addEventListener('input',()=>{const start=el.selectionStart,end=el.selectionEnd;el.value=upper(el.value);if(start!==null)el.setSelectionRange(start,end);}));
+ $('bagDelete').hidden=!bagEditing;
+ $('bagDelete').disabled=false;
  $('bagStatus').textContent='';$('bagDialog').showModal();
 }
 $('newBagButton').onclick=()=>openBag();$('bagClose').onclick=()=>$('bagDialog').close();
+$('bagDelete').onclick=async()=>{
+ if(!bagEditing)return;
+ const {day,index}=bagEditing;
+ const original=dataset[day]||[];
+ const record=original[index];
+ if(!record){$('bagStatus').textContent='Dossier introuvable. Actualise la page.';return;}
+ const company=String(pick(record,...fields[0]));
+ const tag=String(pick(record,...fields[3]));
+ if(!confirm('Supprimer définitivement le dossier '+company+' / '+tag+' du '+day+' ?'))return;
+ $('bagDelete').disabled=true;$('bagSave').disabled=true;$('bagStatus').textContent='Suppression en cours…';
+ try{
+  const response=await fetch('/api/data',{cache:'no-store'});
+  if(!response.ok)throw Error('Impossible de vérifier les données avant suppression.');
+  const live=(await response.json()).data?.[day]||[];
+  const matches=live.map((r,i)=>({r,i})).filter(({r})=>String(pick(r,...fields[0]))===company&&String(pick(r,...fields[3]))===tag);
+  if(matches.length!==1||JSON.stringify(matches[0].r)!==JSON.stringify(record))throw Error('Dossier modifié ou ambigu. Actualise la page avant de supprimer.');
+  const updated=live.filter((_,i)=>i!==matches[0].i);
+  await save({days:[{date:day,records:updated}]});
+  dataset[day]=updated;bagEditing=null;$('bagDialog').close();render();
+  $('message').textContent='Dossier '+company+' / '+tag+' supprimé de D1 TEST.';
+ }catch(err){$('bagStatus').textContent='Erreur : '+err.message;}
+ finally{$('bagDelete').disabled=false;$('bagSave').disabled=false;}
+};
 $('bagForm').onsubmit=async e=>{
  e.preventDefault();const date=$('bagDate').value;
  if(!/^\d{4}-\d{2}-\d{2}$/.test(date)){$('bagStatus').textContent='Date invalide';return;}
