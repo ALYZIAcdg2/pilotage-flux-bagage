@@ -15,9 +15,9 @@ const months={JANVIER:1,FEVRIER:2,MARS:3,AVRIL:4,MAI:5,JUIN:6,JUILLET:7,AOUT:8,S
 function workbookPeriod(workbook){
  const dates=[];
  for(const sheet of workbook.worksheets){
-  if(!/^\\d{1,2}$/.test(sheet.name.trim()))continue;
-  const heading=upper(sheet.getCell('C8').text).normalize('NFD').replace(/[\\u0300-\\u036f]/g,'');
-  const match=heading.match(/\\b(JANVIER|FEVRIER|MARS|AVRIL|MAI|JUIN|JUILLET|AOUT|SEPTEMBRE|OCTOBRE|NOVEMBRE|DECEMBRE)\\s+(\\d{2,4})\\b/);
+  if(!/^\d{1,2}$/.test(sheet.name.trim()))continue;
+  const heading=upper(sheet.getCell('C8').text).normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+  const match=heading.match(/\b(JANVIER|FEVRIER|MARS|AVRIL|MAI|JUIN|JUILLET|AOUT|SEPTEMBRE|OCTOBRE|NOVEMBRE|DECEMBRE)\s+(\d{2,4})\b/);
   if(!match)throw Error('Mois/année introuvables dans C8, feuille '+sheet.name);
   const year=Number(match[2].length===2?'20'+match[2]:match[2]);
   if(year<2000||year>2100)throw Error('Année invalide, feuille '+sheet.name);
@@ -27,7 +27,7 @@ function workbookPeriod(workbook){
  return dates[0];
 }
 function dateFromSheet(sheet,period){
- const m=/^(?:0?[1-9]|[12]\\d|3[01])$/.exec(sheet.name.trim());
+ const m=/^(?:0?[1-9]|[12]\d|3[01])$/.exec(sheet.name.trim());
  if(!m)return null;
  const day=Number(m[0]),[year,month]=period.split('-').map(Number);
  if(day>new Date(year,month,0).getDate())throw Error('Jour invalide pour '+period+' : '+sheet.name);
