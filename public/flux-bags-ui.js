@@ -101,7 +101,7 @@ $('summaryClose').onclick=()=>$('summaryDialog').close();
 for(const id of ['summaryPeriod','summaryFrom','summaryTo','summaryAirline'])$(id).onchange=renderSummary;
 
 function dailySummaryFor(date){return (metadata['flux_bags_daily_summary_'+date.slice(0,7)]||{})[date]||[];}
-function companyCodes(){return [...new Set(Object.keys(dataset).flatMap(date=>dailySummaryFor(date).map(r=>String(r.airline||'').toUpperCase())).filter(Boolean))].sort();}
+function companyCodes(){return [...new Set([...Object.keys(companyNames),...Object.keys(dataset).flatMap(date=>dailySummaryFor(date).map(r=>String(r.airline||'').toUpperCase())),...Object.values(dataset).flatMap(rows=>(Array.isArray(rows)?rows:[]).map(r=>String(pick(r,...fields[0])).toUpperCase()))].filter(Boolean))].sort();}
 function selectedDates(period,from,to){return Object.keys(dataset).filter(d=>period==='day'?d===from:period==='month'?d.slice(0,7)===from.slice(0,7):d>=from&&d<=to).sort();}
 function groupedMetrics(dates,company){const map=new Map();for(const date of dates)for(const r of dailySummaryFor(date)){const code=String(r.airline||'').toUpperCase();if(!code||company&&company!==code)continue;if(!map.has(code))map.set(code,{airline:code,...Object.fromEntries(summaryKeys.map(k=>[k,0]))});for(const k of summaryKeys)map.get(code)[k]+=Number(r[k])||0;}return [...map.values()].sort((a,b)=>a.airline.localeCompare(b.airline));}
 function setCompanies(select){const selected=select.value;const codes=companyCodes();select.innerHTML='<option value="">Toutes les compagnies</option>'+codes.map(c=>'<option value="'+esc(c)+'">'+esc(c)+'</option>').join('');select.value=codes.includes(selected)?selected:'';}
