@@ -11,12 +11,33 @@ const keys=['cie','flightNumber','departureTime','tagNumber','inboundFlight','ar
 const dataFields=['cie','flightNumber','departureTime','tagNumber','inboundFlight','arrivalTime','location','remarks','anomaly','commentAction','fluxStatus','faultStation'];
 const summaryKeys=['expected','toProcess','saved','loaded','notLoaded'];
 const makeStatus=s=>upper(s).replace(/\s+/g,' ');
-function dateFromSheet(sheet){const m=/^(?:0?[1-9]|[12]\d|3[01])$/.exec(sheet.name.trim());return m?'2026-09-'+m[0].padStart(2,'0'):null;}
+const months={JANVIER:1,FEVRIER:2,MARS:3,AVRIL:4,MAI:5,JUIN:6,JUILLET:7,AOUT:8,SEPTEMBRE:9,OCTOBRE:10,NOVEMBRE:11,DECEMBRE:12};
+function workbookPeriod(workbook){
+ const dates=[];
+ for(const sheet of workbook.worksheets){
+  if(!/^\\d{1,2}$/.test(sheet.name.trim()))continue;
+  const heading=upper(sheet.getCell('C8').text).normalize('NFD').replace(/[\\u0300-\\u036f]/g,'');
+  const match=heading.match(/\\b(JANVIER|FEVRIER|MARS|AVRIL|MAI|JUIN|JUILLET|AOUT|SEPTEMBRE|OCTOBRE|NOVEMBRE|DECEMBRE)\\s+(\\d{2,4})\\b/);
+  if(!match)throw Error('Mois/année introuvables dans C8, feuille '+sheet.name);
+  const year=Number(match[2].length===2?'20'+match[2]:match[2]);
+  if(year<2000||year>2100)throw Error('Année invalide, feuille '+sheet.name);
+  dates.push(year+'-'+String(months[match[1]]).padStart(2,'0'));
+ }
+ if(!dates.length||new Set(dates).size!==1)throw Error('Périodes incohérentes entre les feuilles journalières.');
+ return dates[0];
+}
+function dateFromSheet(sheet,period){
+ const m=/^(?:0?[1-9]|[12]\\d|3[01])$/.exec(sheet.name.trim());
+ if(!m)return null;
+ const day=Number(m[0]),[year,month]=period.split('-').map(Number);
+ if(day>new Date(year,month,0).getDate())throw Error('Jour invalide pour '+period+' : '+sheet.name);
+ return period+'-'+String(day).padStart(2,'0');
+}
 function parseWorkbook(workbook){
- const days={};let total=0;
+ const days={};let total=0;const period=workbookPeriod(workbook);
  for(const sheet of workbook.worksheets){
   if(!/^\d{1,2}$/.test(sheet.name.trim()))continue;
-  const date=dateFromSheet(sheet);if(!date)continue;
+  const date=dateFromSheet(sheet,period);if(!date)continue;
   const rows=[],summary=[],remarks=[];
   const heading=sheet.getRow(27);
   if(upper(heading.getCell(1).text)!=='CIE'||!upper(heading.getCell(4).text).includes('TAG'))throw Error('Colonnes inattendues, feuille '+sheet.name+' ligne 27');
