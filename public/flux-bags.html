@@ -132,6 +132,22 @@ header nav{display:flex;align-items:center;gap:9px;flex-wrap:wrap}
 @media(max-width:599px) and (orientation:portrait){header{padding:12px;gap:8px}header h1{font-size:16px}header nav{width:100%;justify-content:flex-start;flex-wrap:wrap}main{padding:8px}.panel{padding:10px}.kpis{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.kpi{padding:10px}.tools{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));align-items:end}.tools label,.tools input,.tools select{min-width:0;width:100%}.tools input[type=search]{min-width:0}.bagtable table{min-width:1500px}.formgrid{grid-template-columns:repeat(2,minmax(0,1fr))}dialog{width:calc(100vw - 16px);max-width:none;max-height:calc(100dvh - 16px);padding:14px}.modalactions{flex-wrap:wrap}.last-refresh{font-size:11px}}
 /* Mobile paysage */
 @media(max-width:899px) and (orientation:landscape) and (max-height:550px){header{padding:8px 12px}header h1{font-size:15px}main{padding:8px 12px}.kpis{grid-template-columns:repeat(5,minmax(0,1fr));gap:8px}.kpi{padding:8px}.kpi strong{font-size:20px}.bagtable table{min-width:1500px}dialog{max-height:calc(100dvh - 12px);width:min(92vw,920px)}}
+
+/* V18 TEST — En-têtes homogènes et barre d'actions multi-écrans. */
+.bagtable table{width:100%;min-width:1650px;table-layout:fixed;border-collapse:collapse}
+.bagtable col.c-comment{width:230px}
+.bagtable col.c-anomalie{width:155px}
+.bagtable col.c-fault{width:165px}
+.bagtable thead tr{height:52px}
+.bagtable thead th{height:52px!important;white-space:nowrap!important;overflow-wrap:normal!important;word-break:normal!important;vertical-align:middle!important;padding:10px 8px!important;line-height:1.2!important;font-size:11px!important;letter-spacing:0!important}
+.bagtable thead th .th-inner{display:flex;align-items:center;justify-content:space-between;gap:7px;min-width:0;white-space:nowrap}
+.bagtable thead th .sort-triangle{font-size:10px;line-height:1;flex:0 0 auto;color:#2b648d}
+.bagtable tbody td{vertical-align:middle!important}
+header nav{display:flex;flex-wrap:nowrap!important;align-items:center;justify-content:flex-end;gap:8px;min-width:0}
+header nav #headerRefresh,header nav .tools-menu{flex:0 0 auto;white-space:nowrap}
+header nav .last-refresh{flex:0 1 auto;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+@media(max-width:767px){header{flex-wrap:wrap}header nav{width:100%;gap:6px;justify-content:flex-end}header nav #headerRefresh{padding:9px 10px}header nav .tools-menu summary{padding:9px 10px}header nav .last-refresh{font-size:10px;margin-right:auto}}
+@media(max-width:390px){header nav .last-refresh{max-width:115px}}
 </style></head><body><header><div><h1>PILOTAGE FLUX BAGAGE</h1><small>Compte rendu pilotage · environnement de TEST</small></div><nav><span id="lastRefresh" class="last-refresh" aria-live="polite">Dernière actualisation : —</span><button id="headerRefresh" class="secondary" type="button">↻ Actualiser</button><details class="tools-menu"><summary>⚙ Outils</summary><div><a href="/flux-bags-import.html" class="tools-import">📥 IMPORTER</a><button type="button" id="export" class="secondary">📊 EXPORT EXCEL</button></div></details></nav></header><main>
 <div class="panel tools"><label>PÉRIODE<select id="view"><option value="day">Jour</option><option value="month">Mois</option></select></label><label id="dateLabel">Date<input type="date" id="date"></label><label>Compagnie<select id="airline"><option value="">Toutes les compagnies</option></select></label><label>Rechercher<input type="search" id="search" placeholder="Vol, tag, localisation…"></label><button id="newBagButton" class="new-bag-green">+ Nouveau dossier</button><button id="summaryButton" class="secondary">RÉCAPITULATIF</button><button id="remarkButton">Remarques</button><button id="chartsButton" class="secondary" aria-label="Graphiques" title="Graphiques">▥</button></div>
 <div id="message"></div><div id="kpis" class="kpis"></div>
