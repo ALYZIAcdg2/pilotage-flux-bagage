@@ -21,7 +21,26 @@ function matchesBagSearch(r,raw){
  return fields.some(keys=>String(pick(r,...keys)).toLocaleUpperCase('fr').includes(q));
 }
 function visibleRows(){const company=$('airline').value,search=$('search').value.trim().toLowerCase();return allRows().filter(({r})=>(!company||String(pick(r,...fields[0])).toUpperCase()===company)&&(!search||matchesBagSearch(r,search))).sort((a,b)=>{const x=sortColumn===0?a.date:String(pick(a.r,...fields[sortColumn-1])),y=sortColumn===0?b.date:String(pick(b.r,...fields[sortColumn-1]));return sortDirection*x.localeCompare(y,'fr',{numeric:true,sensitivity:'base'});});}
-function summary(){const month=currentMonth(),source=$('view').value==='month'?(metadata['flux_bags_monthly_'+month]||[]):((metadata['flux_bags_daily_summary_'+month]||{})[$('date').value]||[]);return source.filter(r=>!$('airline').value||String(r.airline).toUpperCase()===$('airline').value);}
+function summary(){
+ const dates=$('view').value==='month'?Object.keys(dataset).filter(d=>d.startsWith(currentMonth()+'-')):[$('date').value];
+ const byCompany=new Map();
+ const ensure=code=>{if(!byCompany.has(code))byCompany.set(code,{airline:code,expected:0,toProcess:0,saved:0,loaded:0,notLoaded:0});return byCompany.get(code);};
+ for(const date of dates){
+  for(const r of dataset[date]||[]){
+   const code=String(pick(r,...fields[0])).toUpperCase();if(!code)continue;
+   const v=ensure(code);v.toProcess++;
+   const status=String(normalizeFluxStatus(pick(r,...fields[10]))||'');
+   if(status==='SAUVÉ')v.saved++;
+   else if(status==='CHARGÉ')v.loaded++;
+   else if(status==='NON CHARGÉ')v.notLoaded++;
+  }
+  for(const r of dailySummaryFor(date)){const code=String(r.airline||'').toUpperCase();if(code)ensure(code).expected+=Number(r.expected)||0;}
+ }
+ if($('view').value==='month'&&!dates.length){
+  for(const r of metadata['flux_bags_monthly_'+currentMonth()]||[]){const code=String(r.airline||'').toUpperCase();if(code)ensure(code).expected+=Number(r.expected)||0;}
+ }
+ return [...byCompany.values()].filter(r=>!$('airline').value||r.airline===$('airline').value);
+}
 const summaryKeys=['expected','toProcess','saved','loaded','notLoaded'];
 function syncModalDate(prefix){
  const period=$(prefix+'Period').value,from=$(prefix+'From'),to=$(prefix+'To'),monthly=period==='month';
