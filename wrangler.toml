@@ -6,8 +6,7 @@ compatibility_date = "2026-10-13"
 directory = "./public"
 binding = "ASSETS"
 
-# À renseigner après création de la base D1 indépendante Cloudflare.
-# [[d1_databases]]
-# binding = "DB"
-# database_name = "pilotage-flux-bagage-db"
-# database_id = "REMPLACER_PAR_ID_D1"
+[[d1_databases]]
+binding = "DB"
+database_name = "pilotage-flux-bagage-db"
+database_id = "96863598-cbd2-4f66-a7b8-204fb8a9b8eb"
