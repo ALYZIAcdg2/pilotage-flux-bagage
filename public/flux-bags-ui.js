@@ -367,6 +367,7 @@ function render(){
 }
 async function load(){
  try{const res=await fetch('/api/data',{cache:'no-store'});if(!res.ok)throw Error('API '+res.status);const json=await res.json();dataset=json.data||{};metadata=json.metadata||{};
+ $('lastRefresh').textContent='Dernière actualisation : '+new Intl.DateTimeFormat('fr-FR',{hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false}).format(new Date());
  const dates=Object.keys(dataset).sort();syncDateControl();
  const codes=[...new Set([...Object.values(dataset).flatMap(rows=>(Array.isArray(rows)?rows:[]).map(r=>String(pick(r,...fields[0])).toUpperCase())),...(metadata['flux_bags_monthly_'+currentMonth()]||[]).map(r=>String(r.airline).toUpperCase())].filter(Boolean))].sort();
  const selected=$('airline').value;$('airline').innerHTML='<option value="">Toutes les compagnies</option>'+codes.map(x=>'<option value="'+esc(x)+'">'+esc(x)+'</option>').join('');$('airline').value=codes.includes(selected)?selected:'';render();
