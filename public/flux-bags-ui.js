@@ -52,16 +52,8 @@ function syncModalDate(prefix){
 }
 function filteredSummary(){
  const period=$('summaryPeriod').value,from=$('summaryFrom').value,to=$('summaryTo').value,airline=$('summaryAirline').value;
- const dates=Object.keys(dataset).filter(d=>period==='day'?d===from:period==='month'?d.slice(0,7)===from.slice(0,7):d>=from&&d<=to).sort();
- const combined=new Map();
- for(const date of dates){const source=(metadata['flux_bags_daily_summary_'+date.slice(0,7)]||{})[date]||[];
-  for(const r of source){const code=String(r.airline||'').toUpperCase();if(!code||airline&&code!==airline)continue;
-   if(!combined.has(code))combined.set(code,{airline:code,...Object.fromEntries(summaryKeys.map(k=>[k,0]))});
-   const dest=combined.get(code);for(const k of summaryKeys)dest[k]+=Number(r[k])||0;
-  }
- }
- if(period==='month'&&!combined.size){for(const r of (metadata['flux_bags_monthly_'+from.slice(0,7)]||[])){const code=String(r.airline||'').toUpperCase();if(code&&(!airline||code===airline))combined.set(code,{airline:code,...Object.fromEntries(summaryKeys.map(k=>[k,Number(r[k])||0]))});}}
- return [...combined.values()].sort((a,b)=>a.airline.localeCompare(b.airline));
+ const dates=selectedDates(period,from,to);
+ return groupedMetrics(dates,airline);
 }
 let selectedSummaryCompany='';
 const companyNames={AI:'AIR INDIA',AT:'ROYAL AIR MAROC',AV:'AVIANCA',EI:'AER LINGUS',FI:'ICELANDAIR',HF:'AIR CÔTE D’IVOIRE',JU:'AIR SERBIA',LO:'LOT',RJ:'ROYAL JORDANIAN',SB:'AIRCALIN',SK:'SAS',SQ:'SINGAPORE AIRLINES',TK:'TURKISH AIRLINES',TW:'T’WAY',WB:'RWANDAIR'};
@@ -122,7 +114,28 @@ for(const id of ['summaryPeriod','summaryFrom','summaryTo','summaryAirline'])$(i
 function dailySummaryFor(date){return (metadata['flux_bags_daily_summary_'+date.slice(0,7)]||{})[date]||[];}
 function companyCodes(){return [...new Set([...Object.keys(companyNames),...Object.keys(dataset).flatMap(date=>dailySummaryFor(date).map(r=>String(r.airline||'').toUpperCase())),...Object.values(dataset).flatMap(rows=>(Array.isArray(rows)?rows:[]).map(r=>String(pick(r,...fields[0])).toUpperCase()))].filter(Boolean))].sort();}
 function selectedDates(period,from,to){return Object.keys(dataset).filter(d=>period==='day'?d===from:period==='month'?d.slice(0,7)===from.slice(0,7):d>=from&&d<=to).sort();}
-function groupedMetrics(dates,company){const map=new Map();for(const date of dates)for(const r of dailySummaryFor(date)){const code=String(r.airline||'').toUpperCase();if(!code||company&&company!==code)continue;if(!map.has(code))map.set(code,{airline:code,...Object.fromEntries(summaryKeys.map(k=>[k,0]))});for(const k of summaryKeys)map.get(code)[k]+=Number(r[k])||0;}return [...map.values()].sort((a,b)=>a.airline.localeCompare(b.airline));}
+function groupedMetrics(dates,company){
+ const map=new Map();
+ for(const date of dates){
+  for(const r of dataset[date]||[]){
+   const code=String(pick(r,...fields[0])).toUpperCase();
+   if(!code||(company&&company!==code))continue;
+   if(!map.has(code))map.set(code,{airline:code,...Object.fromEntries(summaryKeys.map(k=>[k,0]))});
+   const m=map.get(code);m.toProcess++;
+   const status=normalizeFluxStatus(pick(r,...fields[10]));
+   if(status==='SAUVÉ')m.saved++;
+   else if(status==='CHARGÉ')m.loaded++;
+   else if(status==='NON CHARGÉ')m.notLoaded++;
+  }
+  for(const r of dailySummaryFor(date)){
+   const code=String(r.airline||'').toUpperCase();
+   if(!code||(company&&company!==code))continue;
+   if(!map.has(code))map.set(code,{airline:code,...Object.fromEntries(summaryKeys.map(k=>[k,0]))});
+   map.get(code).expected+=Number(r.expected)||0;
+  }
+ }
+ return [...map.values()].sort((a,b)=>a.airline.localeCompare(b.airline));
+}
 function setCompanies(select){const selected=select.value;const codes=companyCodes();select.innerHTML='<option value="">Toutes les compagnies</option>'+codes.map(c=>'<option value="'+esc(c)+'">'+esc(c)+'</option>').join('');select.value=codes.includes(selected)?selected:'';}
 function openCharts(){
  const monthly=$('view').value==='month';$('chartsPeriod').value=monthly?'month':'day';$('chartsFrom').type=monthly?'month':'date';$('chartsFrom').value=monthly?$('date').value.slice(0,7):($('date').value.length===7?$('date').value+'-01':$('date').value);$('chartsTo').value=$('date').value.length===7?$('date').value+'-01':$('date').value;setCompanies($('chartsAirline'));$('chartsAirline').value=$('airline').value||'';renderCharts();$('chartsDialog').showModal();
