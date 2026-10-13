@@ -75,15 +75,27 @@ export async function exportFluxExcel({dataset,metadata={},period,from,to,compan
  const dailyRows=[...daily.values()].sort((a,b)=>a.date.localeCompare(b.date));
  const total=selected.length,loaded=selected.filter(x=>statusKey(x.r)==='loaded').length,notLoaded=selected.filter(x=>statusKey(x.r)==='notLoaded').length,saved=selected.filter(x=>statusKey(x.r)==='saved').length,other=total-loaded-notLoaded-saved;
  const scope=dateScope(period,from,to)+(company?'  •  '+company:'  •  Toutes compagnies');
- const recap=book.addWorksheet('RÉCAPITULATIF');setup(recap,Array(14).fill(15));recap.views=[{state:'frozen',ySplit:3}];hero(recap,'RÉCAPITULATIF',scope,14);
- metric(recap,5,1,3,'DOSSIERS TOTAL',total);metric(recap,5,4,6,'CHARGÉS',loaded,'168454');metric(recap,5,7,9,'NON CHARGÉS',notLoaded,'C2410C');metric(recap,5,10,12,'SAUVÉS / AUTRES',saved+other,'52667C');
- band(recap,9,1,14,'RÉPARTITION PAR COMPAGNIE');
- dataHeader(recap,10,['COMPAGNIE','DOSSIERS','CHARGÉS','NON CHARGÉS','SAUVÉS','AUTRES','ATTENDUS','% DOSSIERS']);
- for(const r of metrics){const row=recap.addRow([r.airline,r.toProcess,r.loaded,r.notLoaded,r.saved,r.other,r.expected,total?Number((r.toProcess/total*100).toFixed(1)):0]);row.getCell(8).numFmt='0.0"%"';}
- styleData(recap,11,recap.rowCount,8);
- const chartRow=Math.max(14,recap.rowCount+3);band(recap,chartRow,1,14,'GRAPHIQUES — ÉVOLUTION ET RÉPARTITION');
- addChart(book,recap,'line',dailyRows,chartRow,0,740,340);
- addChart(book,recap,'bar',metrics,chartRow+18,0,740,360);
+ const recap=book.addWorksheet('RÉCAPITULATIF');setup(recap,Array(16).fill(12));recap.views=[{state:'frozen',ySplit:3}];hero(recap,'RÉCAPITULATIF',scope,16);
+ metric(recap,5,1,4,'DOSSIERS TOTAL',total);metric(recap,5,5,8,'CHARGÉS  '+(total?(100*loaded/total).toFixed(1):'0')+' %',loaded,'168454');
+ metric(recap,5,9,12,'NON CHARGÉS  '+(total?(100*notLoaded/total).toFixed(1):'0')+' %',notLoaded,'C2410C');
+ metric(recap,5,13,16,'SAUVÉS / AUTRES',saved+other,'52667C');
+ band(recap,9,1,8,'RÉPARTITION PAR COMPAGNIE  ·  TOP 10');band(recap,9,10,16,'SYNTHÈSE DES STATUTS');
+ dataHeader(recap,10,['COMPAGNIE','DOSSIERS','CHARGÉS','NON CHARGÉS','SAUVÉS','AUTRES','ATTENDUS','PART %']);
+ for(let i=0;i<Math.max(10,Math.min(metrics.length,10));i++){
+  const r=metrics[i];if(!r)continue;
+  const row=recap.getRow(11+i);[r.airline,r.toProcess,r.loaded,r.notLoaded,r.saved,r.other,r.expected,total?Number((r.toProcess/total*100).toFixed(1)):0].forEach((v,j)=>row.getCell(j+1).value=v);
+  row.getCell(8).numFmt='0.0"%"';
+ }
+ styleData(recap,11,20,8);
+ const summary=[['TOTAL',total],['CHARGÉS',loaded],['NON CHARGÉS',notLoaded],['SAUVÉS',saved],['AUTRES',other],['COMPAGNIES',metrics.filter(x=>x.toProcess).length],['JOURNÉES',dates.length]];
+ summary.forEach(([label,value],i)=>{const row=recap.getRow(11+i);recap.mergeCells(11+i,10,11+i,13);const c=row.getCell(10);c.value=label;c.font=font(muted,11,true);row.getCell(14).value=value;row.getCell(14).font=font(navy,13,true);row.height=25;});
+ band(recap,23,1,8,'ÉVOLUTION JOURNALIÈRE');band(recap,23,9,16,'RÉPARTITION DES STATUTS');
+ addChart(book,recap,'line',dailyRows,24,0,635,300);
+ addChart(book,recap,'kpi',metrics,24,8,635,300);
+ band(recap,42,1,8,'TOP ANOMALIES');band(recap,42,9,16,'TOP LOCALISATIONS');
+ [...anomalies].sort((a,b)=>b[1]-a[1]).slice(0,8).forEach(([label,n],i)=>{recap.mergeCells(43+i,1,43+i,6);recap.getCell(43+i,1).value=label;recap.getCell(43+i,7).value=n;});
+ [...locations].sort((a,b)=>b[1]-a[1]).slice(0,8).forEach(([label,n],i)=>{recap.mergeCells(43+i,9,43+i,14);recap.getCell(43+i,9).value=label;recap.getCell(43+i,15).value=n;});
+ recap.pageSetup={...recap.pageSetup,orientation:'landscape',fitToPage:true,fitToWidth:1,fitToHeight:1,printArea:'A1:P52'};
  const dossier=book.addWorksheet('DOSSIERS');setup(dossier,[14,9,13,16,22,17,17,24,25,26,36,18,23]);hero(dossier,'DOSSIERS',scope,13);
  dataHeader(dossier,5,names);for(const {date,r} of selected)dossier.addRow([fmtDate(date),...fields.map(k=>String(pick(r,k)))]);
  styleData(dossier,6,dossier.rowCount,13,12);dossier.views=[{state:'frozen',ySplit:5}];dossier.autoFilter={from:'A5',to:'M'+Math.max(6,dossier.rowCount)};
