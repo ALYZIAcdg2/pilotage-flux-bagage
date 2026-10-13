@@ -1,0 +1,13 @@
+name = "pilotage-flux-bagage"
+main = "worker.js"
+compatibility_date = "2026-10-13"
+
+[assets]
+directory = "./public"
+binding = "ASSETS"
+
+# À renseigner après création de la base D1 indépendante Cloudflare.
+# [[d1_databases]]
+# binding = "DB"
+# database_name = "pilotage-flux-bagage-db"
+# database_id = "REMPLACER_PAR_ID_D1"
