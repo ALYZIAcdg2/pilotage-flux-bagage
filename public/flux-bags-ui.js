@@ -3,7 +3,6 @@ const $=id=>document.getElementById(id);
 let dataset={},metadata={},editing=null,sortColumn=0,sortDirection=1,bagEditing=null;
 const esc=x=>String(x??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const pick=(r,...keys)=>keys.map(k=>r?.[k]).find(v=>v!==undefined&&v!==null&&v!=='')??'';
-const bagCount=r=>String(pick(r,'tagNumber','tag','numeroTag')||'').split(/[\/;,\n]+/).filter(x=>x.trim()).length;
 const fields=[['cie','compagnie','airline','company'],['flightNumber','vol','numeroVol','flight'],['departureTime','heureDepart','heure'],['tagNumber','tag','numeroTag'],['inboundFlight','volApport'],['arrivalTime','heureArrivee'],['location','localisation'],['remarks','remarques'],['anomaly','anomalie'],['commentAction','commentaireAction','action','commentaire'],['fluxStatus','status'],['faultStation','fault_station']];
 const names=['DATE','CIE','N° VOL','HEURE DÉPART','N° TAG','NBRE BAG','VOL APPORT','HEURE ARV.','LOCALISATION','REMARQUES','ANOMALIE','COMMENTAIRE/ACTION','STATUT','FAULT STATION'];
 const currentMonth=()=>$('date').value.slice(0,7);
@@ -29,14 +28,14 @@ function summary(){
  for(const date of dates){
   for(const r of dataset[date]||[]){
    const code=String(pick(r,...fields[0])).toUpperCase();if(!code)continue;
-   const v=ensure(code);v.toProcess++;v.expected+=bagCount(r);
+   const v=ensure(code);v.toProcess++;
    const status=String(normalizeFluxStatus(pick(r,...fields[10]))||'');
    if(status==='SAUVÉ')v.saved++;
    else if(status==='CHARGÉ')v.loaded++;
    else if(status==='NON CHARGÉ')v.notLoaded++;
    else if(status==='ANNULÉ')v.cancelled++;
   }
-  /* Nombre de bagages calculé à partir des TAG enregistrés, pas des prévisions manuelles. */
+  for(const r of dailySummaryFor(date)){const code=String(r.airline||'').toUpperCase();if(code)ensure(code).expected+=Number(r.expected)||0;}
  }
  if($('view').value==='month'&&!dates.length){
   for(const r of metadata['flux_bags_monthly_'+currentMonth()]||[]){const code=String(r.airline||'').toUpperCase();if(code)ensure(code).expected+=Number(r.expected)||0;}
@@ -62,7 +61,7 @@ const companyNames={AI:'AIR INDIA',AT:'ROYAL AIR MAROC',AV:'AVIANCA',DE:'CONDOR'
 function renderCompanyCards(rows){
  const query=$('summaryCompanySearch').value.trim().toLocaleUpperCase('fr');
  const visible=rows.filter(r=>!query||r.airline.includes(query)||(companyNames[r.airline]||'').toLocaleUpperCase('fr').includes(query));
- $('summaryCompanyCards').innerHTML=visible.map(r=>'<button type="button" class="summary-company-card" data-company="'+esc(r.airline)+'"><span class="summary-company-code"><img class="summary-airline-logo" src="https://images.kiwi.com/airlines/64/'+encodeURIComponent(r.airline)+'.png" alt="" loading="lazy" onerror="if(!this.dataset.fallback){this.dataset.fallback=\'1\';this.src=\'https://content.airhex.com/content/logos/airlines_\'+encodeURIComponent(this.dataset.code)+\'_200_200_s.png\';}else{this.hidden=true;}" data-code="'+esc(r.airline)+'" />'+esc(r.airline)+'</span><span><small>'+esc(companyNames[r.airline]||'COMPAGNIE')+'</small><strong>'+Number(r.toProcess||0).toLocaleString('fr-FR')+' dossier(s)</strong><small>'+Number(r.expected||0).toLocaleString('fr-FR')+' bagage(s)</small></span></button>').join('')||'<p class="empty">Aucune compagnie trouvée.</p>';
+ $('summaryCompanyCards').innerHTML=visible.map(r=>'<button type="button" class="summary-company-card" data-company="'+esc(r.airline)+'"><span class="summary-company-code"><img class="summary-airline-logo" src="https://images.kiwi.com/airlines/64/'+encodeURIComponent(r.airline)+'.png" alt="" loading="lazy" onerror="if(!this.dataset.fallback){this.dataset.fallback=\'1\';this.src=\'https://content.airhex.com/content/logos/airlines_\'+encodeURIComponent(this.dataset.code)+\'_200_200_s.png\';}else{this.hidden=true;}" data-code="'+esc(r.airline)+'" />'+esc(r.airline)+'</span><span><small>'+esc(companyNames[r.airline]||'COMPAGNIE')+'</small><strong>'+Number(r.toProcess||0).toLocaleString('fr-FR')+' dossier(s) bagages</strong><small>'+Number(r.expected||0).toLocaleString('fr-FR')+' bagages attendus (prévus)</small></span></button>').join('')||'<p class="empty">Aucune compagnie trouvée.</p>';
  $('summaryCompanyCards').querySelectorAll('button').forEach(b=>b.onclick=()=>{selectedSummaryCompany=b.dataset.company;renderCompanyDetail(rows);});
  renderCompanyDetail(rows);
 }
@@ -90,7 +89,7 @@ function renderSummary(){
  const period=$('summaryPeriod').value; $('summaryTo').disabled=period!=='range';
  const s=filteredSummary();
  const totals=Object.fromEntries(summaryKeys.map(k=>[k,s.reduce((n,r)=>n+r[k],0)]));
- $('summaryKpis').innerHTML=[['NOMBRE DE BAGAGES',totals.expected],['À TRAITER (dossiers)',totals.toProcess],['SAUVÉS (après action)',totals.saved],['CHARGÉS (après action)',totals.loaded],['NON CHARGÉS (non récupérés)',totals.notLoaded],['ANNULÉS (passager annulé)',totals.cancelled]].map(([label,n],i)=>'<div class="kpi"><label><span class="kpi-icon">'+kpiIcons[i]+'</span>'+label+'</label><strong>'+n.toLocaleString('fr-FR')+'</strong></div>').join('');
+ $('summaryKpis').innerHTML=[['BAGAGES ATTENDUS (prévus)',totals.expected],['À TRAITER (dossiers)',totals.toProcess],['SAUVÉS (après action)',totals.saved],['CHARGÉS (après action)',totals.loaded],['NON CHARGÉS (non récupérés)',totals.notLoaded],['ANNULÉS (passager annulé)',totals.cancelled]].map(([label,n],i)=>'<div class="kpi"><label><span class="kpi-icon">'+kpiIcons[i]+'</span>'+label+'</label><strong>'+n.toLocaleString('fr-FR')+'</strong></div>').join('');
  renderCompanyCards(s);
  $('summaryScope').textContent=period==='month'?'Mois : '+$('summaryFrom').value.slice(0,7):period==='day'?'Journée : '+$('summaryFrom').value:'Du '+$('summaryFrom').value+' au '+$('summaryTo').value;
 }
@@ -123,7 +122,7 @@ function groupedMetrics(dates,company){
    const code=String(pick(r,...fields[0])).toUpperCase();
    if(!code||(company&&company!==code))continue;
    if(!map.has(code))map.set(code,{airline:code,...Object.fromEntries(summaryKeys.map(k=>[k,0]))});
-   const m=map.get(code);m.toProcess++;m.expected+=bagCount(r);
+   const m=map.get(code);m.toProcess++;
    const status=normalizeFluxStatus(pick(r,...fields[10]));
    if(status==='SAUVÉ')m.saved++;
    else if(status==='CHARGÉ')m.loaded++;
@@ -134,7 +133,7 @@ function groupedMetrics(dates,company){
    const code=String(r.airline||'').toUpperCase();
    if(!code||(company&&company!==code))continue;
    if(!map.has(code))map.set(code,{airline:code,...Object.fromEntries(summaryKeys.map(k=>[k,0]))});
-   /* Le total réel provient des TAG des dossiers. */
+   map.get(code).expected+=Number(r.expected)||0;
   }
  }
  return [...map.values()].sort((a,b)=>a.airline.localeCompare(b.airline));
@@ -196,7 +195,7 @@ $('chartSections').addEventListener('keydown',e=>{const point=e.target.closest('
 function openChartDetail(type){
  const period=$('chartsPeriod').value,from=$('chartsFrom').value,to=$('chartsTo').value,company=$('chartsAirline').value,dates=selectedDates(period,from,to);
  const labels={gauges:'Indicateurs de performance',stacked:'Répartition par compagnie',trend:'Évolution journalière'};
- const columns=[['airline','Compagnie'],['expected','Bagages'],['toProcess','À traiter'],['saved','Sauvés'],['loaded','Chargés'],['notLoaded','Non chargés'],['cancelled','Annulés']];
+ const columns=[['airline','Compagnie'],['expected','Attendus'],['toProcess','À traiter'],['saved','Sauvés'],['loaded','Chargés'],['notLoaded','Non chargés'],['cancelled','Annulés']];
  let rows=type==='trend'?dates.flatMap(date=>dailySummaryFor(date).filter(r=>!company||String(r.airline||'').toUpperCase()===company).map(r=>({...r,date}))):groupedMetrics(dates,company);
  if(period==='month'&&!rows.length&&type!=='trend')rows=(metadata['flux_bags_monthly_'+from.slice(0,7)]||[]).filter(r=>!company||String(r.airline).toUpperCase()===company);
  const detail=$('chartDetail'),scope=period==='month'?from:period==='day'?from:from+' au '+to;
@@ -310,7 +309,7 @@ $('bagForm').onsubmit=async e=>{
   $('bagDialog').close();render();$('message').textContent='Dossier enregistré dans D1 TEST.';
  }catch(err){$('bagStatus').textContent=err.message;}finally{$('bagSave').disabled=false;}
 };
-const kpiLabels=['Nombre de bagages (calcul automatique)','À traiter','Sauvés','Chargés','Non chargés','Annulés'];
+const kpiLabels=['Bagages attendus','À traiter','Sauvés','Chargés','Non chargés','Annulés'];
 const kpiIcons=['🧳','📋','🛟','✅','⚠️','🚫'];
 function kpiContext(){const month=currentMonth(),monthly=$('view').value==='month',date=monthly?month:$('date').value;return {monthly,date,key:monthly?'flux_bags_monthly_'+month:'flux_bags_daily_summary_'+month};}
 function kpiRows(ctx){return ctx.monthly?[...(metadata[ctx.key]||[])]:[...((metadata[ctx.key]||{})[ctx.date]||[])];}
@@ -344,7 +343,7 @@ $('kpiForm').onsubmit=async event=>{
  catch(err){$('kpiError').textContent='Erreur : '+err.message;}
  finally{$('kpiSave').disabled=false;}
 };
-const kpiNames=['Nombre de bagages','À traiter','Sauvés','Chargés / sauvés','Non chargés','Annulés'];
+const kpiNames=['Bagages attendus','À traiter','Sauvés','Chargés / sauvés','Non chargés','Annulés'];
 let selectedKpi=0,kpiCompanyDrill=null;
 const kpiStatus=r=>String(normalizeFluxStatus(pick(r,...fields[10]))||pick(r,...fields[10])).toUpperCase();
 function kpiFilteredRows(key,company){
@@ -391,7 +390,7 @@ $('kpiListBody').onclick=e=>{
 $('kpiListBody').onkeydown=e=>{if(e.key==='Enter'||e.key===' '){const row=e.target.closest('[data-date][data-index]');if(row){e.preventDefault();row.click();}}};
 $('kpis').onclick=e=>{const card=e.target.closest('.kpi');if(card)openKpiList([...$('kpis').children].indexOf(card));};
 function render(){
- const s=summary(),searchActive=!!$('search').value.trim(),totals=Object.fromEntries(summaryKeys.map(k=>[k,searchActive?(k==='expected'?kpiFilteredRows(k,null).reduce((n,entry)=>n+bagCount(entry.r),0):kpiFilteredRows(k,null).length):s.reduce((n,r)=>n+(Number(r[k])||0),0)]));
+ const s=summary(),searchActive=!!$('search').value.trim(),totals=Object.fromEntries(summaryKeys.map(k=>[k,searchActive?kpiFilteredRows(k,null).length:s.reduce((n,r)=>n+(Number(r[k])||0),0)]));
  $('kpis').innerHTML=[['NOMBRE DE BAGAGES',totals.expected],['À TRAITER',totals.toProcess],['SAUVÉS',totals.saved],['CHARGÉS',totals.loaded],['NON CHARGÉS',totals.notLoaded],['ANNULÉS',totals.cancelled]].map(([name,n],i)=>'<div class="kpi" title="Cliquer pour consulter les dossiers du KPI" style="cursor:pointer"><label><span class="kpi-icon">'+kpiIcons[i]+'</span>'+name+'</label><strong>'+n.toLocaleString('fr-FR')+'</strong></div>').join('');
  const rows=visibleRows();$('rowCount').textContent=rows.length+' dossier(s)';
  $('rows').innerHTML=rows.map(({date,index,r})=>'<tr tabindex="0" role="button" aria-label="Ouvrir dossier '+esc(pick(r,...fields[3]))+'" data-date="'+date+'" data-index="'+index+'">'+fields.map((keys,i)=>{const value=i===10?(normalizeFluxStatus(pick(r,...keys))||pick(r,...keys)||'À qualifier'):pick(r,...keys);if(i===0){const status=String(normalizeFluxStatus(pick(r,...fields[10]))||pick(r,...fields[10])||'').toUpperCase();const cls=status.includes('ANNUL')?'status-cancelled':status.includes('NON CHARG')?'status-unloaded':status.includes('SAUV')?'status-saved':status.includes('CHARG')?'status-loaded':'status-other';return '<td class="bag-indicator"><span class="status-dot '+cls+' '+(cls==='status-unloaded'?'status-dot-blink':'')+'" title="'+esc(status||'Statut non défini')+'" aria-label="'+esc(status||'Statut non défini')+'"></span></td><td class="bag-date">'+esc(date.split('-').reverse().join('/'))+'</td><td class="bag-company"><strong>'+esc(value)+'</strong></td>';}if(i===3){const tags=splitBagTags(value);return '<td class="bag-tag-cell" title="'+esc(tags.join(' / '))+'"><span class="bag-tag-preview">'+esc(tags[0]||'')+(tags.length>1?' <span class="bag-tag-more">+'+(tags.length-1)+' …</span>':'')+'</span></td><td class="bag-count">'+tags.length+'</td>';}if(i!==10)return '<td>'+esc(value)+'</td>';const status=String(value).toUpperCase();const cls=status.includes('ANNUL')?'status-cancelled':status.includes('NON CHARG')?'status-unloaded':status.includes('SAUV')?'status-saved':status.includes('CHARG')?'status-loaded':'status-other';return '<td><span class="status-pill '+cls+'">'+esc(value)+'</span></td>';}).join('')+'</tr>').join('')||'<tr><td colspan="15" class="empty">Aucun dossier pour cette sélection</td></tr>';
