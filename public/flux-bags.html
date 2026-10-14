@@ -168,6 +168,14 @@ header nav .last-refresh{flex:0 1 auto;min-width:0;white-space:nowrap;overflow:h
 .bagtable td.bag-count{text-align:center;font-weight:750;white-space:nowrap}
 #bagHistoryToggle{margin:8px 0 2px;padding:8px 12px}
 #bagHistory[hidden],#bagHistoryToggle[hidden]{display:none!important}
+
+/* Ajustement fin des colonnes DATE / VOL / DEPART / TAG : séparation lisible. */
+.bagtable col.c-date{width:100px}
+.bagtable col.c-vol{width:88px}
+.bagtable col.c-depart{width:116px}
+.bagtable col.c-tag{width:142px}
+.bagtable thead th:nth-child(5),.bagtable tbody td:nth-child(5){padding-right:16px!important}
+.bagtable thead th:nth-child(6),.bagtable tbody td:nth-child(6){padding-left:14px!important}
 </style></head><body><header><div><h1>PILOTAGE FLUX BAGAGE</h1><small>Compte rendu pilotage · environnement de TEST</small></div><nav><span id="lastRefresh" class="last-refresh" aria-live="polite">Dernière actualisation : —</span><button id="headerRefresh" class="secondary" type="button">↻ Actualiser</button><details class="tools-menu"><summary>⚙ Outils</summary><div><a href="/flux-bags-import.html" class="tools-import">📥 IMPORTER</a><button type="button" id="export" class="secondary">📊 EXPORT EXCEL</button></div></details></nav></header><main>
 <div class="panel tools"><label>PÉRIODE<select id="view"><option value="day">Jour</option><option value="month">Mois</option></select></label><label id="dateLabel">Date<input type="date" id="date"></label><label>Compagnie<select id="airline"><option value="">Toutes les compagnies</option></select></label><label>Rechercher<input type="search" id="search" placeholder="Vol, tag, localisation…"></label><button id="newBagButton" class="new-bag-green">+ Nouveau dossier</button><button id="summaryButton" class="secondary">RÉCAPITULATIF</button><button id="remarkButton">Remarques</button><button id="chartsButton" class="secondary" aria-label="Graphiques" title="Graphiques">▥</button></div>
 <div id="message"></div><div id="kpis" class="kpis"></div>
