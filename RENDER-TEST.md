@@ -7,3 +7,8 @@ Dans Render : **New → Web Service**, connecter le dépôt GitHub `ALYZIAcdg2/p
 Ouvrir l'URL `https://<nom>.onrender.com/`, tester l'ouverture de Nouveau dossier et la lecture des données de TEST, puis envoyer ce lien via Outlook pour voir s'il reste visible.
 
 Ne pas utiliser cette adresse comme environnement de production. Les modifications de dossiers sur cette URL affectent **la base TEST**.
+
+
+## Déploiement automatique
+
+Un commit sur cette branche est destiné au service Render TEST configuré sur `On Commit`. La production Cloudflare reste indépendante.
