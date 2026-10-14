@@ -4,7 +4,7 @@ let dataset={},metadata={},editing=null,sortColumn=0,sortDirection=1,bagEditing=
 const esc=x=>String(x??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const pick=(r,...keys)=>keys.map(k=>r?.[k]).find(v=>v!==undefined&&v!==null&&v!=='')??'';
 const fields=[['cie','compagnie','airline','company'],['flightNumber','vol','numeroVol','flight'],['departureTime','heureDepart','heure'],['tagNumber','tag','numeroTag'],['inboundFlight','volApport'],['arrivalTime','heureArrivee'],['location','localisation'],['remarks','remarques'],['anomaly','anomalie'],['commentAction','commentaireAction','action','commentaire'],['fluxStatus','status'],['faultStation','fault_station']];
-const names=['DATE','CIE','N° VOL','HEURE DÉPART','N° TAG','VOL APPORT','HEURE ARV.','LOCALISATION','REMARQUES','ANOMALIE','COMMENTAIRE/ACTION','STATUT','FAULT STATION'];
+const names=['DATE','CIE','N° VOL','HEURE DÉPART','N° TAG','NBRE BAG','VOL APPORT','HEURE ARV.','LOCALISATION','REMARQUES','ANOMALIE','COMMENTAIRE/ACTION','STATUT','FAULT STATION'];
 const currentMonth=()=>$('date').value.slice(0,7);
 const allRows=()=>Object.entries(dataset).filter(([date])=>$('view').value==='month'?date.startsWith(currentMonth()+'-'):date===$('date').value).flatMap(([date,rows])=>(Array.isArray(rows)?rows:[]).map((r,index)=>({date,index,r})));
 function matchesBagSearch(r,raw){
@@ -20,7 +20,7 @@ function matchesBagSearch(r,raw){
  if(/^[A-Z]{2,3}$/.test(q))return cie===q;
  return fields.some(keys=>String(pick(r,...keys)).toLocaleUpperCase('fr').includes(q));
 }
-function visibleRows(){const company=$('airline').value,search=$('search').value.trim().toLowerCase();return allRows().filter(({r})=>(!company||String(pick(r,...fields[0])).toUpperCase()===company)&&(!search||matchesBagSearch(r,search))).sort((a,b)=>{const x=sortColumn===0?a.date:String(pick(a.r,...fields[sortColumn-1])),y=sortColumn===0?b.date:String(pick(b.r,...fields[sortColumn-1]));return sortDirection*x.localeCompare(y,'fr',{numeric:true,sensitivity:'base'});});}
+function visibleRows(){const company=$('airline').value,search=$('search').value.trim().toLowerCase();return allRows().filter(({r})=>(!company||String(pick(r,...fields[0])).toUpperCase()===company)&&(!search||matchesBagSearch(r,search))).sort((a,b)=>{const x=sortColumn===0?a.date:sortColumn===5?String(bagCount(a.r)):String(pick(a.r,...fields[sortColumn>5?sortColumn-2:sortColumn-1])),y=sortColumn===0?b.date:sortColumn===5?String(bagCount(b.r)):String(pick(b.r,...fields[sortColumn>5?sortColumn-2:sortColumn-1]));return sortDirection*x.localeCompare(y,'fr',{numeric:true,sensitivity:'base'});});}
 function summary(){
  const dates=$('view').value==='month'?Object.keys(dataset).filter(d=>d.startsWith(currentMonth()+'-')):[$('date').value];
  const byCompany=new Map();
@@ -223,6 +223,7 @@ function makeBagField(i,r){
  if(i===11)return '<label>'+label+'<select '+common+' style="text-transform:none">'+['',...new Set([value,...faultStations].filter(Boolean))].map(x=>'<option value="'+esc(x)+'" '+(x===value?'selected':'')+'>'+esc(x||'Choisir une station / anomalie')+'</option>').join('')+'</select></label>';
  return '<label>'+label+'<input '+common+' value="'+esc(upper(value))+'" '+(i===3?'required':'')+' autocomplete="off"></label>';
 }
+const bagCount=r=>splitBagTags(pick(r,...fields[3])).length;
 const splitBagTags=value=>String(value||'').split(/[\/;,\n]+/).map(x=>upper(x.trim())).filter(Boolean);
 function addBagTag(value=''){
  const container=$('bagTagRows'),row=document.createElement('div');
@@ -244,7 +245,9 @@ function updateBagPrefixes(){
 function openBag(day=null,index=null){
  bagEditing=day!==null&&index!==null?{day,index}:null;
  const r=bagEditing?dataset[day]?.[index]:null;
+ $('bagHistory').hidden=true;$('bagHistoryToggle').hidden=!r;$('bagHistoryToggle').textContent='Afficher l’historique';
  $('bagHistory').innerHTML=(r?((r._history||[]).map(h=>'<div class="history-entry"><strong>'+esc(h.at||'')+'</strong> · '+(h.changes||[]).map(c=>esc(c.field)+': '+esc(c.old)+' → '+esc(c.new)).join(' · ')+'</div>').join('')||'<small>Aucun historique de modification enregistré.</small>'):'');
+ $('bagHistoryToggle').onclick=()=>{const show=$('bagHistory').hidden;$('bagHistory').hidden=!show;$('bagHistoryToggle').textContent=show?'Masquer l’historique':'Afficher l’historique';};
  $('bagTitle').textContent=bagEditing?'Dossier bagage · '+String(pick(r,...fields[3])):'Nouveau dossier';
  $('bagDate').value=day||new Date(Date.now()-new Date().getTimezoneOffset()*60000).toISOString().slice(0,10);
  $('bagFields').innerHTML=fields.map((keys,i)=>makeBagField(i,r)).join('');
@@ -300,7 +303,7 @@ $('bagForm').onsubmit=async e=>{
   const days=[{date,records}];
   if(bagEditing&&bagEditing.day!==date){const original=[...(dataset[bagEditing.day]||[])];original.splice(bagEditing.index,1);days.push({date:bagEditing.day,records:original});}
   await save({days});dataset[date]=records;if(bagEditing&&bagEditing.day!==date)dataset[bagEditing.day]=days[1].records;
-  $('date').value=date;$('view').value='day';syncDateControl();$('airline').value='';$('search').value='';
+  const stayMonth=$('view').value==='month';$('date').value=stayMonth?date.slice(0,7):date;syncDateControl();$('airline').value='';$('search').value='';
   $('bagDialog').close();render();$('message').textContent='Dossier enregistré dans D1 TEST.';
  }catch(err){$('bagStatus').textContent=err.message;}finally{$('bagSave').disabled=false;}
 };
@@ -388,7 +391,7 @@ function render(){
  const s=summary(),searchActive=!!$('search').value.trim(),totals=Object.fromEntries(summaryKeys.map(k=>[k,searchActive?kpiFilteredRows(k,null).length:s.reduce((n,r)=>n+(Number(r[k])||0),0)]));
  $('kpis').innerHTML=[['BAGAGES ATTENDUS',totals.expected],['À TRAITER',totals.toProcess],['SAUVÉS',totals.saved],['CHARGÉS',totals.loaded],['NON CHARGÉS',totals.notLoaded]].map(([name,n],i)=>'<div class="kpi" title="Cliquer pour consulter les dossiers du KPI" style="cursor:pointer"><label><span class="kpi-icon">'+kpiIcons[i]+'</span>'+name+'</label><strong>'+n.toLocaleString('fr-FR')+'</strong></div>').join('');
  const rows=visibleRows();$('rowCount').textContent=rows.length+' dossier(s)';
- $('rows').innerHTML=rows.map(({date,index,r})=>'<tr tabindex="0" role="button" aria-label="Ouvrir dossier '+esc(pick(r,...fields[3]))+'" data-date="'+date+'" data-index="'+index+'">'+fields.map((keys,i)=>{const value=i===10?(normalizeFluxStatus(pick(r,...keys))||pick(r,...keys)||'À qualifier'):pick(r,...keys);if(i===0){const status=String(normalizeFluxStatus(pick(r,...fields[10]))||pick(r,...fields[10])||'').toUpperCase();const cls=status.includes('NON CHARG')?'status-unloaded':status.includes('SAUV')?'status-saved':status.includes('CHARG')?'status-loaded':'status-other';return '<td class="bag-indicator"><span class="status-dot '+cls+' '+(cls==='status-unloaded'?'status-dot-blink':'')+'" title="'+esc(status||'Statut non défini')+'" aria-label="'+esc(status||'Statut non défini')+'"></span></td><td class="bag-date">'+esc(date.split('-').reverse().join('/'))+'</td><td class="bag-company"><strong>'+esc(value)+'</strong></td>';}if(i!==10)return '<td>'+esc(value)+'</td>';const status=String(value).toUpperCase();const cls=status.includes('NON CHARG')?'status-unloaded':status.includes('SAUV')?'status-saved':status.includes('CHARG')?'status-loaded':'status-other';return '<td><span class="status-pill '+cls+'">'+esc(value)+'</span></td>';}).join('')+'</tr>').join('')||'<tr><td colspan="14" class="empty">Aucun dossier pour cette sélection</td></tr>';
+ $('rows').innerHTML=rows.map(({date,index,r})=>'<tr tabindex="0" role="button" aria-label="Ouvrir dossier '+esc(pick(r,...fields[3]))+'" data-date="'+date+'" data-index="'+index+'">'+fields.map((keys,i)=>{const value=i===10?(normalizeFluxStatus(pick(r,...keys))||pick(r,...keys)||'À qualifier'):pick(r,...keys);if(i===0){const status=String(normalizeFluxStatus(pick(r,...fields[10]))||pick(r,...fields[10])||'').toUpperCase();const cls=status.includes('NON CHARG')?'status-unloaded':status.includes('SAUV')?'status-saved':status.includes('CHARG')?'status-loaded':'status-other';return '<td class="bag-indicator"><span class="status-dot '+cls+' '+(cls==='status-unloaded'?'status-dot-blink':'')+'" title="'+esc(status||'Statut non défini')+'" aria-label="'+esc(status||'Statut non défini')+'"></span></td><td class="bag-date">'+esc(date.split('-').reverse().join('/'))+'</td><td class="bag-company"><strong>'+esc(value)+'</strong></td>';}if(i===3){const tags=splitBagTags(value);return '<td class="bag-tag-cell" title="'+esc(tags.join(' / '))+'"><span class="bag-tag-preview">'+esc(tags[0]||'')+(tags.length>1?' <span class="bag-tag-more">+'+(tags.length-1)+' …</span>':'')+'</span></td><td class="bag-count">'+tags.length+'</td>';}if(i!==10)return '<td>'+esc(value)+'</td>';const status=String(value).toUpperCase();const cls=status.includes('NON CHARG')?'status-unloaded':status.includes('SAUV')?'status-saved':status.includes('CHARG')?'status-loaded':'status-other';return '<td><span class="status-pill '+cls+'">'+esc(value)+'</span></td>';}).join('')+'</tr>').join('')||'<tr><td colspan="15" class="empty">Aucun dossier pour cette sélection</td></tr>';
  document.querySelectorAll('.bagtable th').forEach((th,i)=>{if(i===0){th.textContent='';th.removeAttribute('aria-sort');return;}const column=i-1;th.setAttribute('aria-sort',column===sortColumn?(sortDirection===1?'ascending':'descending'):'none');th.innerHTML='<span class="th-inner"><span>'+esc(column===0?'DATE':names[column])+'</span><span class="sort-triangle" aria-hidden="true">'+(column===sortColumn?(sortDirection===1?'▲':'▼'):'▴')+'</span></span>';});
 
  $('message').textContent=($('view').value==='month'?'Vue mensuelle · ':'Vue journalière · ')+$('date').value+' · '+rows.length+' dossiers';
