@@ -13,9 +13,9 @@ function matchesBagSearch(r,raw){
  const cie=String(pick(r,...fields[0])).toLocaleUpperCase('fr').replace(/\s+/g,'');
  const flight=String(pick(r,...fields[1])).toLocaleUpperCase('fr').replace(/\s+/g,'');
  // A flight number is matched against the flight column only, never against a tag or comment.
- if(/^\d+$/.test(q))return flight===q;
+ if(/^\d+$/.test(q))return flight.replace(/^[A-Z]{2,3}/,'')===q;
  const combined=q.match(/^([A-Z]{2,3})(\d+)$/);
- if(combined)return cie===combined[1]&&flight===combined[2];
+ if(combined)return cie===combined[1]&&flight.replace(/^[A-Z]{2,3}/,'')===combined[2];
  // Airline codes are matched to the company column, not arbitrary text fields.
  if(/^[A-Z]{2,3}$/.test(q))return cie===q;
  return fields.some(keys=>String(pick(r,...keys)).toLocaleUpperCase('fr').includes(q));
@@ -60,7 +60,7 @@ const companyNames={AI:'AIR INDIA',AT:'ROYAL AIR MAROC',AV:'AVIANCA',EI:'AER LIN
 function renderCompanyCards(rows){
  const query=$('summaryCompanySearch').value.trim().toLocaleUpperCase('fr');
  const visible=rows.filter(r=>!query||r.airline.includes(query)||(companyNames[r.airline]||'').toLocaleUpperCase('fr').includes(query));
- $('summaryCompanyCards').innerHTML=visible.map(r=>'<button type="button" class="summary-company-card" data-company="'+esc(r.airline)+'"><span class="summary-company-code"><img class="summary-airline-logo" src="https://images.kiwi.com/airlines/64/'+encodeURIComponent(r.airline)+'.png" alt="" loading="lazy" onerror="this.hidden=true" />'+esc(r.airline)+'</span><span><small>'+esc(companyNames[r.airline]||'COMPAGNIE')+'</small><strong>'+Number(r.expected||0).toLocaleString('fr-FR')+' bagages</strong><small>'+Number(r.toProcess||0)+' à traiter</small></span></button>').join('')||'<p class="empty">Aucune compagnie trouvée.</p>';
+ $('summaryCompanyCards').innerHTML=visible.map(r=>'<button type="button" class="summary-company-card" data-company="'+esc(r.airline)+'"><span class="summary-company-code"><img class="summary-airline-logo" src="https://images.kiwi.com/airlines/64/'+encodeURIComponent(r.airline)+'.png" alt="" loading="lazy" onerror="if(!this.dataset.fallback){this.dataset.fallback=\'1\';this.src=\'https://content.airhex.com/content/logos/airlines_\'+encodeURIComponent(this.dataset.code)+\'_200_200_s.png\';}else{this.hidden=true;}" data-code="'+esc(r.airline)+'" />'+esc(r.airline)+'</span><span><small>'+esc(companyNames[r.airline]||'COMPAGNIE')+'</small><strong>'+Number(r.expected||0).toLocaleString('fr-FR')+' bagages</strong><small>'+Number(r.toProcess||0)+' à traiter</small></span></button>').join('')||'<p class="empty">Aucune compagnie trouvée.</p>';
  $('summaryCompanyCards').querySelectorAll('button').forEach(b=>b.onclick=()=>{selectedSummaryCompany=b.dataset.company;renderCompanyDetail(rows);});
  renderCompanyDetail(rows);
 }
