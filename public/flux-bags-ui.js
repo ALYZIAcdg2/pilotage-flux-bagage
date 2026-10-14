@@ -62,7 +62,7 @@ const companyNames={AI:'AIR INDIA',AT:'ROYAL AIR MAROC',AV:'AVIANCA',DE:'CONDOR'
 function renderCompanyCards(rows){
  const query=$('summaryCompanySearch').value.trim().toLocaleUpperCase('fr');
  const visible=rows.filter(r=>!query||r.airline.includes(query)||(companyNames[r.airline]||'').toLocaleUpperCase('fr').includes(query));
- $('summaryCompanyCards').innerHTML=visible.map(r=>'<button type="button" class="summary-company-card" data-company="'+esc(r.airline)+'"><span class="summary-company-code"><img class="summary-airline-logo" src="https://images.kiwi.com/airlines/64/'+encodeURIComponent(r.airline)+'.png" alt="" loading="lazy" onerror="if(!this.dataset.fallback){this.dataset.fallback=\'1\';this.src=\'https://content.airhex.com/content/logos/airlines_\'+encodeURIComponent(this.dataset.code)+\'_200_200_s.png\';}else{this.hidden=true;}" data-code="'+esc(r.airline)+'" />'+esc(r.airline)+'</span><span><small>'+esc(companyNames[r.airline]||'COMPAGNIE')+'</small><strong>'+Number(r.toProcess||0).toLocaleString('fr-FR')+' dossier(s) bagages</strong><small>'+Number(r.expected||0).toLocaleString('fr-FR')+' bagages attendus (prévus)</small></span></button>').join('')||'<p class="empty">Aucune compagnie trouvée.</p>';
+ $('summaryCompanyCards').innerHTML=visible.map(r=>'<button type="button" class="summary-company-card" data-company="'+esc(r.airline)+'"><span class="summary-company-code"><img class="summary-airline-logo" src="https://images.kiwi.com/airlines/64/'+encodeURIComponent(r.airline)+'.png" alt="" loading="lazy" onerror="if(!this.dataset.fallback){this.dataset.fallback=\'1\';this.src=\'https://content.airhex.com/content/logos/airlines_\'+encodeURIComponent(this.dataset.code)+\'_200_200_s.png\';}else{this.hidden=true;}" data-code="'+esc(r.airline)+'" />'+esc(r.airline)+'</span><span><small>'+esc(companyNames[r.airline]||'COMPAGNIE')+'</small><strong>'+Number(r.toProcess||0).toLocaleString('fr-FR')+' dossier(s)</strong><small>'+Number(r.expected||0).toLocaleString('fr-FR')+' bagage(s)</small></span></button>').join('')||'<p class="empty">Aucune compagnie trouvée.</p>';
  $('summaryCompanyCards').querySelectorAll('button').forEach(b=>b.onclick=()=>{selectedSummaryCompany=b.dataset.company;renderCompanyDetail(rows);});
  renderCompanyDetail(rows);
 }
@@ -310,7 +310,7 @@ $('bagForm').onsubmit=async e=>{
   $('bagDialog').close();render();$('message').textContent='Dossier enregistré dans D1 TEST.';
  }catch(err){$('bagStatus').textContent=err.message;}finally{$('bagSave').disabled=false;}
 };
-const kpiLabels=['Nombre de bagages','À traiter','Sauvés','Chargés','Non chargés','Annulés'];
+const kpiLabels=['Nombre de bagages (calcul automatique)','À traiter','Sauvés','Chargés','Non chargés','Annulés'];
 const kpiIcons=['🧳','📋','🛟','✅','⚠️','🚫'];
 function kpiContext(){const month=currentMonth(),monthly=$('view').value==='month',date=monthly?month:$('date').value;return {monthly,date,key:monthly?'flux_bags_monthly_'+month:'flux_bags_daily_summary_'+month};}
 function kpiRows(ctx){return ctx.monthly?[...(metadata[ctx.key]||[])]:[...((metadata[ctx.key]||{})[ctx.date]||[])];}
