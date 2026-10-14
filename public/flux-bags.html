@@ -152,6 +152,12 @@ header nav .last-refresh{flex:0 1 auto;min-width:0;white-space:nowrap;overflow:h
 #bagFields.formgrid{align-items:start}#bagFields.formgrid>label{align-self:start}#bagFields.formgrid>label input{height:44px;min-height:44px}#bagFields .bag-tag-field{align-self:start}
 #bagFields.formgrid>label{display:flex;flex-direction:column;justify-content:flex-start;align-self:start}#bagFields.formgrid>label input,#bagFields.formgrid>label select,#bagFields .bag-tag-row input{box-sizing:border-box;height:44px;min-height:44px;max-height:44px;padding:9px;line-height:24px;flex:none}#bagFields .bag-tag-row{align-items:flex-start}#bagFields .bag-tag-row .bag-tag-remove{height:44px;min-height:44px;padding:0 10px;line-height:44px}
 
+/* V17 TEST: tighten CIE / flight / departure, and separate departure from tag. */
+.bagtable col.c-cie{width:49px}
+.bagtable col.c-vol{width:76px}
+.bagtable col.c-depart{width:102px}
+.bagtable thead th:nth-child(5),.bagtable tbody td:nth-child(5){padding-right:13px}
+.bagtable thead th:nth-child(6),.bagtable tbody td:nth-child(6){padding-left:11px}
 /* Compact list with a single TAG preview and an explicit bag count */
 .bagtable col.c-bagcount{width:67px}
 .bagtable col.c-tag{width:146px}
