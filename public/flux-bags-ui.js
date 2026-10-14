@@ -216,18 +216,30 @@ function makeBagField(i,r){
  const keys=fields[i],value=r?String(pick(r,...keys)):'',label=['CIE','N° VOL','HEURE DÉPART','N° TAG','VOL APPORT','HEURE ARV.','LOCALISATION','REMARQUES','ANOMALIE','COMMENTAIRE/ACTION','STATUT','FAULT STATION'][i];
  const name='field'+i,common=' name="'+name+'" id="bagField'+i+'" ';
  if(i===0){const choices=[...new Set([...companyCodes(),...Object.values(dataset).flatMap(rows=>(Array.isArray(rows)?rows:[]).map(x=>upper(pick(x,...fields[0])))),upper(value)].filter(Boolean))].sort();return '<label>'+label+'<select '+common+' required><option value="">Choisir une compagnie</option>'+choices.map(c=>'<option value="'+esc(c)+'" '+(upper(value)===c?'selected':'')+'>'+esc(c)+'</option>').join('')+'</select></label>';}
+ if(i===3)return '<div class="bag-tag-field"><label>'+label+'</label><div id="bagTagRows"></div><button type="button" id="bagTagAdd" class="secondary bag-tag-add" aria-label="Ajouter un TAG">+ Ajouter un TAG</button></div>';
  if(i===2||i===5)return '<label>'+label+'<input '+common+' type="text" inputmode="numeric" placeholder="HH:MM" value="'+esc(normalizedClock(value))+'" maxlength="5"></label>';
  if(i===7)return '<label>'+label+'<input '+common+' list="bagRemarksList" value="'+esc(upper(value))+'" placeholder="Choisir ou saisir une remarque" autocomplete="off"><datalist id="bagRemarksList">'+[...new Set([...remarkChoices,upper(value)].filter(Boolean))].map(x=>'<option value="'+esc(x)+'"></option>').join('')+'</datalist></label>';
  if(i===10)return '<label>'+label+'<select '+common+'>'+['','SAUVÉ','CHARGÉ','NON CHARGÉ'].map(x=>'<option value="'+esc(x)+'" '+(upper(value).replace(/E$/,'É')===x?'selected':'')+'>'+esc(x||'Choisir un statut')+'</option>').join('')+'</select></label>';
  if(i===11)return '<label>'+label+'<select '+common+' style="text-transform:none">'+['',...new Set([value,...faultStations].filter(Boolean))].map(x=>'<option value="'+esc(x)+'" '+(x===value?'selected':'')+'>'+esc(x||'Choisir une station / anomalie')+'</option>').join('')+'</select></label>';
  return '<label>'+label+'<input '+common+' value="'+esc(upper(value))+'" '+(i===3?'required':'')+' autocomplete="off"></label>';
 }
+const splitBagTags=value=>String(value||'').split(/\\s*\\/\\s*|[\\n;,]+/).map(x=>upper(x.trim())).filter(Boolean);
+function addBagTag(value=''){
+ const container=$('bagTagRows'),row=document.createElement('div');
+ row.className='bag-tag-row';
+ const input=document.createElement('input');input.type='text';input.className='bag-tag-input';input.placeholder='N° TAG';input.autocomplete='off';input.required=true;input.value=upper(value);
+ input.addEventListener('input',()=>{const start=input.selectionStart,end=input.selectionEnd;input.value=upper(input.value);if(start!==null)input.setSelectionRange(start,end);});
+ const remove=document.createElement('button');remove.type='button';remove.className='secondary bag-tag-remove';remove.textContent='−';remove.setAttribute('aria-label','Supprimer ce TAG');
+ remove.onclick=()=>{if(container.children.length>1)row.remove();else input.value='';};
+ row.append(input,remove);container.append(row);
+}
+const bagTags=()=>[...document.querySelectorAll('#bagTagRows .bag-tag-input')].map(el=>upper(el.value.trim())).filter(Boolean);
 function updateBagPrefixes(){
- const company=upper($('bagField0').value.trim()),flight=$('bagField1'),tag=$('bagField3');
+ const company=upper($('bagField0').value.trim()),flight=$('bagField1'),tags=[...document.querySelectorAll('#bagTagRows .bag-tag-input')];
  if(!company)return;
  const old=$('bagField0').dataset.previous||'';
  const apply=(input)=>{let value=upper(input.value.trim());if(old&&value.startsWith(old))value=value.slice(old.length);if(value.startsWith(company))value=value.slice(company.length);if(!value||/^\d+$/.test(value))input.value=company+value;};
- apply(flight);apply(tag);$('bagField0').dataset.previous=company;
+ apply(flight);tags.forEach(apply);$('bagField0').dataset.previous=company;
 }
 function openBag(day=null,index=null){
  bagEditing=day!==null&&index!==null?{day,index}:null;
@@ -236,6 +248,8 @@ function openBag(day=null,index=null){
  $('bagTitle').textContent=bagEditing?'Dossier bagage · '+String(pick(r,...fields[3])):'Nouveau dossier';
  $('bagDate').value=day||new Date(Date.now()-new Date().getTimezoneOffset()*60000).toISOString().slice(0,10);
  $('bagFields').innerHTML=fields.map((keys,i)=>makeBagField(i,r)).join('');
+ (splitBagTags(r?pick(r,...fields[3]):'').length?splitBagTags(pick(r,...fields[3])):['']).forEach(addBagTag);
+ $('bagTagAdd').onclick=()=>{addBagTag();const inputs=document.querySelectorAll('#bagTagRows .bag-tag-input');inputs[inputs.length-1].focus();};
  const company=upper($('bagField0').value.trim());
  $('bagField0').dataset.previous=company;
  if(!r){$('bagField0').addEventListener('input',updateBagPrefixes);$('bagField0').addEventListener('change',updateBagPrefixes);}
@@ -272,7 +286,8 @@ $('bagDelete').onclick=async()=>{
 $('bagForm').onsubmit=async e=>{
  e.preventDefault();const date=$('bagDate').value;
  if(!/^\d{4}-\d{2}-\d{2}$/.test(date)){$('bagStatus').textContent='Date invalide';return;}
- const row={};fields.forEach((keys,i)=>row[keys[0]]=i===11?$('bagForm').elements['field'+i].value.trim():upper($('bagForm').elements['field'+i].value.trim()));
+ const row={};fields.forEach((keys,i)=>row[keys[0]]=i===3?bagTags().join(' / '):i===11?$('bagForm').elements['field'+i].value.trim():upper($('bagForm').elements['field'+i].value.trim()));
+ if(new Set(bagTags()).size!==bagTags().length){$('bagStatus').textContent='Un numéro de TAG est présent plusieurs fois dans ce dossier.';return;}
  if(!row.cie||!row.tagNumber){$('bagStatus').textContent='CIE et N° TAG sont obligatoires.';return;}
  for(const key of ['departureTime','arrivalTime']){if(row[key]&&!/^([01]\d|2[0-3]):[0-5]\d$/.test(row[key])){$('bagStatus').textContent='Heure invalide : utiliser HH:MM';return;}}
  const previous=bagEditing?dataset[bagEditing.day]?.[bagEditing.index]:null;
