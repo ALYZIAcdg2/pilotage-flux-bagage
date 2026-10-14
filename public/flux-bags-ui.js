@@ -56,7 +56,7 @@ function filteredSummary(){
  return groupedMetrics(dates,airline);
 }
 let selectedSummaryCompany='';
-const companyNames={AI:'AIR INDIA',AT:'ROYAL AIR MAROC',AV:'AVIANCA',EI:'AER LINGUS',FI:'ICELANDAIR',HF:'AIR CÔTE D’IVOIRE',JU:'AIR SERBIA',LO:'LOT',RJ:'ROYAL JORDANIAN',SB:'AIRCALIN',SK:'SAS',SQ:'SINGAPORE AIRLINES',TK:'TURKISH AIRLINES',TW:'T’WAY',WB:'RWANDAIR'};
+const companyNames={AI:'AIR INDIA',AT:'ROYAL AIR MAROC',AV:'AVIANCA',DE:'CONDOR',EI:'AER LINGUS',FI:'ICELANDAIR',HF:'AIR CÔTE D’IVOIRE',JU:'AIR SERBIA',LA:'LATAM AIRLINES',LO:'LOT',MH:'MALAYSIA AIRLINES',RJ:'ROYAL JORDANIAN',SB:'AIRCALIN',SK:'SAS',SQ:'SINGAPORE AIRLINES',TK:'TURKISH AIRLINES',TW:'T’WAY',WB:'RWANDAIR'};
 function renderCompanyCards(rows){
  const query=$('summaryCompanySearch').value.trim().toLocaleUpperCase('fr');
  const visible=rows.filter(r=>!query||r.airline.includes(query)||(companyNames[r.airline]||'').toLocaleUpperCase('fr').includes(query));
