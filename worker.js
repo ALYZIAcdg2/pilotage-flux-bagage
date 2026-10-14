@@ -1,6 +1,9 @@
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
+    if (url.pathname === '/') {
+      return Response.redirect(new URL('/flux-bags.html', url.origin).toString(), 302);
+    }
     if (url.pathname.startsWith('/api/')) {
       return handleApi(request, env, url);
     }
