@@ -152,12 +152,6 @@ header nav .last-refresh{flex:0 1 auto;min-width:0;white-space:nowrap;overflow:h
 #bagFields.formgrid{align-items:start}#bagFields.formgrid>label{align-self:start}#bagFields.formgrid>label input{height:44px;min-height:44px}#bagFields .bag-tag-field{align-self:start}
 #bagFields.formgrid>label{display:flex;flex-direction:column;justify-content:flex-start;align-self:start}#bagFields.formgrid>label input,#bagFields.formgrid>label select,#bagFields .bag-tag-row input{box-sizing:border-box;height:44px;min-height:44px;max-height:44px;padding:9px;line-height:24px;flex:none}#bagFields .bag-tag-row{align-items:flex-start}#bagFields .bag-tag-row .bag-tag-remove{height:44px;min-height:44px;padding:0 10px;line-height:44px}
 
-/* V17 TEST: tighten CIE / flight / departure, and separate departure from tag. */
-.bagtable col.c-cie{width:49px}
-.bagtable col.c-vol{width:76px}
-.bagtable col.c-depart{width:102px}
-.bagtable thead th:nth-child(5),.bagtable tbody td:nth-child(5){padding-right:13px}
-.bagtable thead th:nth-child(6),.bagtable tbody td:nth-child(6){padding-left:11px}
 /* Compact list with a single TAG preview and an explicit bag count */
 .bagtable col.c-bagcount{width:67px}
 .bagtable col.c-tag{width:146px}
@@ -174,6 +168,16 @@ header nav .last-refresh{flex:0 1 auto;min-width:0;white-space:nowrap;overflow:h
 .bagtable td.bag-count{text-align:center;font-weight:750;white-space:nowrap}
 #bagHistoryToggle{margin:8px 0 2px;padding:8px 12px}
 #bagHistory[hidden],#bagHistoryToggle[hidden]{display:none!important}
+
+/* V17 TEST: align compact columns and prevent departure/tag heading collision. */
+.bagtable col.c-cie{width:52px}
+.bagtable col.c-vol{width:82px}
+.bagtable col.c-depart{width:112px}
+.bagtable col.c-tag{width:146px}
+.bagtable thead th:nth-child(5),.bagtable tbody td:nth-child(5){padding-right:12px!important}
+.bagtable thead th:nth-child(6),.bagtable tbody td:nth-child(6){padding-left:13px!important}
+.bagtable thead th:nth-child(5){white-space:normal!important;line-height:1.25!important}
+.bagtable thead th:nth-child(5) .th-inner{white-space:normal!important;gap:3px!important}
 </style></head><body><header><div><h1>PILOTAGE FLUX BAGAGE</h1><small>Compte rendu pilotage · environnement de TEST</small></div><nav><span id="lastRefresh" class="last-refresh" aria-live="polite">Dernière actualisation : —</span><button id="headerRefresh" class="secondary" type="button">↻ Actualiser</button><details class="tools-menu"><summary>⚙ Outils</summary><div><a href="/flux-bags-import.html" class="tools-import">📥 IMPORTER</a><button type="button" id="export" class="secondary">📊 EXPORT EXCEL</button></div></details></nav></header><main>
 <div class="panel tools"><label>PÉRIODE<select id="view"><option value="day">Jour</option><option value="month">Mois</option></select></label><label id="dateLabel">Date<input type="date" id="date"></label><label>Compagnie<select id="airline"><option value="">Toutes les compagnies</option></select></label><label>Rechercher<input type="search" id="search" placeholder="Vol, tag, localisation…"></label><button id="newBagButton" class="new-bag-green">+ Nouveau dossier</button><button id="summaryButton" class="secondary">RÉCAPITULATIF</button><button id="remarkButton">Remarques</button><button id="chartsButton" class="secondary" aria-label="Graphiques" title="Graphiques">▥</button></div>
 <div id="message"></div><div id="kpis" class="kpis"></div>
