@@ -223,7 +223,7 @@ function makeBagField(i,r){
  if(i===11)return '<label>'+label+'<select '+common+' style="text-transform:none">'+['',...new Set([value,...faultStations].filter(Boolean))].map(x=>'<option value="'+esc(x)+'" '+(x===value?'selected':'')+'>'+esc(x||'Choisir une station / anomalie')+'</option>').join('')+'</select></label>';
  return '<label>'+label+'<input '+common+' value="'+esc(upper(value))+'" '+(i===3?'required':'')+' autocomplete="off"></label>';
 }
-const splitBagTags=value=>String(value||'').split(/\\s*\\/\\s*|[\\n;,]+/).map(x=>upper(x.trim())).filter(Boolean);
+const splitBagTags=value=>String(value||'').split(/[\/;,\n]+/).map(x=>upper(x.trim())).filter(Boolean);
 function addBagTag(value=''){
  const container=$('bagTagRows'),row=document.createElement('div');
  row.className='bag-tag-row';
