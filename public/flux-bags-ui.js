@@ -101,33 +101,10 @@ function visibilityCodes(){
  ])].filter(code=>/^[A-Z0-9]{2,3}$/.test(code)).sort();
 }
 function renderAirlineVisibilityCards(){
- const codes=visibilityCodes(),month=currentMonth();
- $('companyVisibilityPeriod').textContent='Mois : '+month+' · Les valeurs sont enregistrées dans la base TEST.';
- $('companyVisibilityCards').innerHTML=codes.length?codes.map(code=>{
-  const value=monthlyExpected(month,code);
-  return '<div class="company-visibility-card"><input type="checkbox" id="visibleAirline_'+esc(code)+'" data-airline="'+esc(code)+'" '+(airlineVisible(code)?'checked':'')+'><img src="https://images.kiwi.com/airlines/64/'+encodeURIComponent(code)+'.png" loading="lazy" alt="" onerror="this.hidden=true"><label for="visibleAirline_'+esc(code)+'" class="company-visibility-name"><strong>'+esc(code)+'</strong><small>'+esc(companyNames[code]||'Compagnie')+'</small></label><label class="company-visibility-expected">BAGAGES ATTENDUS<input type="number" min="0" step="1" inputmode="numeric" data-expected-airline="'+esc(code)+'" placeholder="Non renseigné" value="'+(value===null?'':value)+'"><small>Saisie manuelle · '+esc(month)+'</small></label><button type="button" class="secondary company-visibility-save" data-save-expected="'+esc(code)+'">Enregistrer</button></div>';
- }).join(''):'<p class="note">Aucune compagnie disponible.</p>';
-}
-async function saveManualExpected(code){
- const input=$('companyVisibilityCards').querySelector('input[data-expected-airline="'+code+'"]');
- if(!input)return;
- const raw=input.value.trim(),value=raw===''?null:Number(raw);
- if(raw!==''&&(!Number.isSafeInteger(value)||value<0)){ $('companyVisibilityMessage').textContent='Nombre invalide pour '+code+'.';return; }
- const month=currentMonth(),key='flux_bags_expected_'+month;
- const next={...(metadata[key]||{})};
- if(value===null)delete next[code];else next[code]=value;
- const button=$('companyVisibilityCards').querySelector('button[data-save-expected="'+code+'"]');
- button.disabled=true;
- $('companyVisibilityMessage').textContent='Enregistrement en cours…';
- try{
-  await save({days:[],metadata:{[key]:next}});
-  metadata[key]=next;
-  $('companyVisibilityMessage').textContent=code+' · '+(value===null?'Valeur effacée':value.toLocaleString('fr-FR')+' bagages attendus')+' pour '+month+' — enregistré.';
-  render();
-  if($('summaryDialog').open)renderSummary();
-  if($('chartsDialog').open)renderCharts();
- }catch(err){$('companyVisibilityMessage').textContent='Échec de l’enregistrement : '+err.message;}
- finally{button.disabled=false;}
+ const codes=visibilityCodes();
+ $('companyVisibilityCards').innerHTML=codes.length?codes.map(code=>
+  '<label class="company-visibility-card"><input type="checkbox" data-airline="'+esc(code)+'" '+(airlineVisible(code)?'checked':'')+'><img src="https://images.kiwi.com/airlines/64/'+encodeURIComponent(code)+'.png" loading="lazy" alt="" onerror="this.hidden=true"><span class="company-visibility-name"><strong>'+esc(code)+'</strong><small>'+esc(companyNames[code]||'Compagnie')+'</small></span></label>'
+ ).join(''):'<p class="note">Aucune compagnie disponible.</p>';
 }
 function applyAirlineVisibility(){
  persistAirlineVisibility();renderAirlineVisibilityCards();
@@ -146,7 +123,6 @@ function setupAirlineVisibility(){
  $('companyVisibilityClose').onclick=()=>$('companyVisibilityDialog').close();
  $('companyVisibilityAll').onclick=()=>{hiddenAirlines.clear();applyAirlineVisibility();};
  $('companyVisibilityNone').onclick=()=>{visibilityCodes().forEach(code=>hiddenAirlines.add(code));applyAirlineVisibility();};
- $('companyVisibilityCards').onclick=e=>{const button=e.target.closest('button[data-save-expected]');if(button)saveManualExpected(button.dataset.saveExpected);};
  $('companyVisibilityCards').onchange=e=>{
   const input=e.target.closest('input[data-airline]');if(!input)return;
   if(input.checked)hiddenAirlines.delete(input.dataset.airline);
