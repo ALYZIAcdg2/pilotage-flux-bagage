@@ -6,7 +6,8 @@ const pick=(r,...keys)=>keys.map(k=>r?.[k]).find(v=>v!==undefined&&v!==null&&v!=
 const fields=[['cie','compagnie','airline','company'],['flightNumber','vol','numeroVol','flight'],['departureTime','heureDepart','heure'],['tagNumber','tag','numeroTag'],['inboundFlight','volApport'],['arrivalTime','heureArrivee'],['location','localisation'],['remarks','remarques'],['anomaly','anomalie'],['commentAction','commentaireAction','action','commentaire'],['fluxStatus','status'],['faultStation','fault_station']];
 const names=['DATE','CIE','N° VOL','HEURE DÉPART','N° TAG','NBRE BAG','VOL APPORT','HEURE ARV.','LOCALISATION','REMARQUES','ANOMALIE','COMMENTAIRE/ACTION','STATUT','FAULT STATION'];
 const currentMonth=()=>$('date').value.slice(0,7);
-const allRows=()=>Object.entries(dataset).filter(([date])=>$('view').value==='month'?date.startsWith(currentMonth()+'-'):date===$('date').value).flatMap(([date,rows])=>(Array.isArray(rows)?rows:[]).map((r,index)=>({date,index,r})));
+const currentYear=()=>$('date').value.slice(0,4);
+const allRows=()=>Object.entries(dataset).filter(([date])=>$('view').value==='year'?date.startsWith(currentYear()+'-'):$('view').value==='month'?date.startsWith(currentMonth()+'-'):date===$('date').value).flatMap(([date,rows])=>(Array.isArray(rows)?rows:[]).map((r,index)=>({date,index,r})));
 function matchesBagSearch(r,raw){
  const q=raw.trim().toLocaleUpperCase('fr').replace(/\s+/g,'');
  if(!q)return true;
@@ -22,7 +23,7 @@ function matchesBagSearch(r,raw){
 }
 function visibleRows(){const company=$('airline').value,search=$('search').value.trim().toLowerCase();return allRows().filter(({r})=>(!company||String(pick(r,...fields[0])).toUpperCase()===company)&&(!search||matchesBagSearch(r,search))).sort((a,b)=>{const x=sortColumn===0?a.date:sortColumn===5?String(bagCount(a.r)):String(pick(a.r,...fields[sortColumn>5?sortColumn-2:sortColumn-1])),y=sortColumn===0?b.date:sortColumn===5?String(bagCount(b.r)):String(pick(b.r,...fields[sortColumn>5?sortColumn-2:sortColumn-1]));return sortDirection*x.localeCompare(y,'fr',{numeric:true,sensitivity:'base'});});}
 function summary(){
- const dates=$('view').value==='month'?Object.keys(dataset).filter(d=>d.startsWith(currentMonth()+'-')):[$('date').value];
+ const dates=$('view').value==='year'?Object.keys(dataset).filter(d=>d.startsWith(currentYear()+'-')):$('view').value==='month'?Object.keys(dataset).filter(d=>d.startsWith(currentMonth()+'-')):[$('date').value];
  const byCompany=new Map();
  const ensure=code=>{if(!byCompany.has(code))byCompany.set(code,{airline:code,expected:0,toProcess:0,saved:0,loaded:0,notLoaded:0,cancelled:0});return byCompany.get(code);};
  for(const date of dates){
@@ -44,10 +45,10 @@ function summary(){
 }
 const summaryKeys=['expected','toProcess','saved','loaded','notLoaded','cancelled'];
 function syncModalDate(prefix){
- const period=$(prefix+'Period').value,from=$(prefix+'From'),to=$(prefix+'To'),monthly=period==='month';
- const v=from.value;from.type=monthly?'month':'date';from.value=monthly?v.slice(0,7):(v.length===7?v+'-01':v);
+ const period=$(prefix+'Period').value,from=$(prefix+'From'),to=$(prefix+'To'),monthly=period==='month',yearly=period==='year';
+ const v=from.value;from.type=yearly?'number':monthly?'month':'date';if(yearly){from.min='2000';from.max='2100';from.step='1';}from.value=yearly?v.slice(0,4):monthly?v.slice(0,7):(v.length===4?v+'-01-01':v.length===7?v+'-01':v);
  document.querySelector('.'+prefix+'-date-label').hidden=false;
- document.querySelector('.'+prefix+'-date-label').firstChild.textContent=monthly?'Mois':period==='day'?'Date':'Du';
+ document.querySelector('.'+prefix+'-date-label').firstChild.textContent=yearly?'Année':monthly?'Mois':period==='day'?'Date':'Du';
  document.querySelector('.'+prefix+'-to-label').hidden=period!=='range';
  to.disabled=period!=='range';
 }
@@ -89,14 +90,16 @@ function renderSummary(){
  const period=$('summaryPeriod').value; $('summaryTo').disabled=period!=='range';
  const s=filteredSummary();
  const totals=Object.fromEntries(summaryKeys.map(k=>[k,s.reduce((n,r)=>n+r[k],0)]));
- $('summaryKpis').innerHTML=[['NOMBRE DE BAGAGES',totals.expected],['À TRAITER (dossiers)',totals.toProcess],['SAUVÉS (après action)',totals.saved],['CHARGÉS (après action)',totals.loaded],['NON CHARGÉS (non récupérés)',totals.notLoaded],['ANNULÉS (passager annulé)',totals.cancelled]].map(([label,n],i)=>'<div class="kpi"><label><span class="kpi-icon">'+kpiIcons[i]+'</span>'+label+'</label><strong>'+n.toLocaleString('fr-FR')+'</strong></div>').join('');
+ const comparison=previousPeriod(period,$('summaryFrom').value),prior=comparison?groupedMetrics(comparison.dates,$('summaryAirline').value):[];
+ const previousTotals=Object.fromEntries(summaryKeys.map(k=>[k,prior.reduce((n,r)=>n+(Number(r[k])||0),0)]));
+ $('summaryKpis').innerHTML=[['NOMBRE DE BAGAGES',totals.expected],['À TRAITER (dossiers)',totals.toProcess],['SAUVÉS (après action)',totals.saved],['CHARGÉS (après action)',totals.loaded],['NON CHARGÉS (non récupérés)',totals.notLoaded],['ANNULÉS (passager annulé)',totals.cancelled]].map(([label,n],i)=>'<div class="kpi"><label><span class="kpi-icon">'+kpiIcons[i]+'</span>'+label+'</label><strong>'+n.toLocaleString('fr-FR')+'</strong>'+(comparison?deltaHtml(n,previousTotals[summaryKeys[i]],comparison.label,comparison.dates.length>0):'')+'</div>').join('');
  renderCompanyCards(s);
- $('summaryScope').textContent=period==='month'?'Mois : '+$('summaryFrom').value.slice(0,7):period==='day'?'Journée : '+$('summaryFrom').value:'Du '+$('summaryFrom').value+' au '+$('summaryTo').value;
+ $('summaryScope').textContent=period==='month'?'Mois : '+$('summaryFrom').value.slice(0,7):period==='year'?'Année : '+$('summaryFrom').value.slice(0,4):period==='day'?'Journée : '+$('summaryFrom').value:'Du '+$('summaryFrom').value+' au '+$('summaryTo').value;
 }
 function openSummary(){
  selectedSummaryCompany='';$('summaryCompanySearch').value='';
- const dates=Object.keys(dataset).sort(),raw=$('date').value||dates.at(-1)||new Date().toISOString().slice(0,10),monthly=$('view').value==='month';
- $('summaryPeriod').value=monthly?'month':'day';
+ const dates=Object.keys(dataset).sort(),raw=$('date').value||dates.at(-1)||new Date().toISOString().slice(0,10),monthly=$('view').value==='month',yearly=$('view').value==='year';
+ $('summaryPeriod').value=yearly?'year':monthly?'month':'day';
  $('summaryFrom').type=monthly?'month':'date';
  $('summaryFrom').value=monthly?raw.slice(0,7):(raw.length===7?raw+'-01':raw);
  $('summaryTo').value=raw.length===7?raw+'-01':raw;
@@ -114,7 +117,9 @@ for(const id of ['summaryPeriod','summaryFrom','summaryTo','summaryAirline'])$(i
 
 function dailySummaryFor(date){return (metadata['flux_bags_daily_summary_'+date.slice(0,7)]||{})[date]||[];}
 function companyCodes(){return [...new Set([...Object.keys(companyNames),...Object.keys(dataset).flatMap(date=>dailySummaryFor(date).map(r=>String(r.airline||'').toUpperCase())),...Object.values(dataset).flatMap(rows=>(Array.isArray(rows)?rows:[]).map(r=>String(pick(r,...fields[0])).toUpperCase()))].filter(Boolean))].sort();}
-function selectedDates(period,from,to){return Object.keys(dataset).filter(d=>period==='day'?d===from:period==='month'?d.slice(0,7)===from.slice(0,7):d>=from&&d<=to).sort();}
+function selectedDates(period,from,to){return Object.keys(dataset).filter(d=>period==='day'?d===from:period==='month'?d.slice(0,7)===from.slice(0,7):period==='year'?d.slice(0,4)===from.slice(0,4):d>=from&&d<=to).sort();}
+function previousPeriod(period,from){if(period==='day'){const d=new Date(from+'T12:00:00Z');d.setUTCDate(d.getUTCDate()-1);const v=d.toISOString().slice(0,10);return {dates:selectedDates('day',v,v),label:'J-1'};}if(period==='month'){const d=new Date(from.slice(0,7)+'-01T12:00:00Z');d.setUTCMonth(d.getUTCMonth()-1);const v=d.toISOString().slice(0,7);return {dates:selectedDates('month',v,v),label:'M-1'};}if(period==='year'){const v=String(Number(from.slice(0,4))-1);return {dates:selectedDates('year',v,v),label:'N-1'};}return null;}
+function deltaHtml(current,previous,label,hasPrevious){if(!hasPrevious)return '<small class="kpi-delta neutral">'+label+' : aucune donnée</small>';const diff=current-previous,pct=previous===0?(current===0?'0 %':'—'):((diff/previous)*100).toLocaleString('fr-FR',{maximumFractionDigits:1})+' %';const color=diff>0?'positive':diff<0?'negative':'neutral';return '<small class="kpi-delta '+color+'">'+label+' : '+(diff>0?'+':'')+diff.toLocaleString('fr-FR')+' ('+(diff>0&&pct!=='—'?'+':'')+pct+')</small>';}
 function groupedMetrics(dates,company){
  const map=new Map();
  for(const date of dates){
@@ -140,7 +145,7 @@ function groupedMetrics(dates,company){
 }
 function setCompanies(select){const selected=select.value;const codes=companyCodes();select.innerHTML='<option value="">Toutes les compagnies</option>'+codes.map(c=>'<option value="'+esc(c)+'">'+esc(c)+'</option>').join('');select.value=codes.includes(selected)?selected:'';}
 function openCharts(){
- const monthly=$('view').value==='month';$('chartsPeriod').value=monthly?'month':'day';$('chartsFrom').type=monthly?'month':'date';$('chartsFrom').value=monthly?$('date').value.slice(0,7):($('date').value.length===7?$('date').value+'-01':$('date').value);$('chartsTo').value=$('date').value.length===7?$('date').value+'-01':$('date').value;setCompanies($('chartsAirline'));$('chartsAirline').value=$('airline').value||'';renderCharts();$('chartsDialog').showModal();
+ const monthly=$('view').value==='month',yearly=$('view').value==='year';$('chartsPeriod').value=yearly?'year':monthly?'month':'day';$('chartsFrom').type=monthly?'month':'date';$('chartsFrom').value=monthly?$('date').value.slice(0,7):($('date').value.length===7?$('date').value+'-01':$('date').value);$('chartsTo').value=$('date').value.length===7?$('date').value+'-01':$('date').value;setCompanies($('chartsAirline'));$('chartsAirline').value=$('airline').value||'';renderCharts();$('chartsDialog').showModal();
 }
 function renderCharts(){
  $('chartDetail').hidden=true;$('chartSections').hidden=false;
@@ -428,7 +433,7 @@ $('remarkButton').onclick=openRemarks;$('remarkClose').onclick=()=>$('remarkDial
 $('rows').onclick=e=>{const tr=e.target.closest('tr[data-index]');if(tr)openBag(tr.dataset.date,Number(tr.dataset.index));};
 $('rows').onkeydown=e=>{if(e.key==='Enter'||e.key===' '){const tr=e.target.closest('tr[data-index]');if(tr){e.preventDefault();openBag(tr.dataset.date,Number(tr.dataset.index));}}};
 document.querySelectorAll('.bagtable th').forEach((th,i)=>{if(i===0)return;const column=i-1;th.tabIndex=0;th.setAttribute('role','button');th.onclick=()=>{if(sortColumn===column)sortDirection*=-1;else{sortColumn=column;sortDirection=1;}render();};th.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();th.click();}};});
-function syncDateControl(){const input=$('date'),month=$('view').value==='month',value=input.value;input.type=month?'month':'date';input.value=month?value.slice(0,7):(value.length===7?value+'-01':value);$('dateLabel').firstChild.textContent=month?'Mois':'Date';}
+function syncDateControl(){const input=$('date'),month=$('view').value==='month',year=$('view').value==='year',value=input.value;input.type=year?'number':month?'month':'date';if(year){input.min='2000';input.max='2100';input.step='1';}input.value=year?value.slice(0,4):month?value.slice(0,7):(value.length===4?value+'-01-01':value.length===7?value+'-01':value);$('dateLabel').firstChild.textContent=year?'Année':month?'Mois':'Date';}
 $('view').onchange=()=>{syncDateControl();render();};
 function openExcelExport(){
  const monthly=$('view').value==='month',value=$('date').value;
