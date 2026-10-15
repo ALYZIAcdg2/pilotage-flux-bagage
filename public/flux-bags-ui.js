@@ -23,7 +23,7 @@ function matchesBagSearch(r,raw){
 }
 function visibleRows(){const company=$('airline').value,search=$('search').value.trim().toLowerCase();return allRows().filter(({r})=>(!company||String(pick(r,...fields[0])).toUpperCase()===company)&&(!search||matchesBagSearch(r,search))).sort((a,b)=>{const x=sortColumn===0?a.date:sortColumn===5?String(bagCount(a.r)):String(pick(a.r,...fields[sortColumn>5?sortColumn-2:sortColumn-1])),y=sortColumn===0?b.date:sortColumn===5?String(bagCount(b.r)):String(pick(b.r,...fields[sortColumn>5?sortColumn-2:sortColumn-1]));return sortDirection*x.localeCompare(y,'fr',{numeric:true,sensitivity:'base'});});}
 function summary(){
- const dates=$('view').value==='year'?Object.keys(dataset).filter(d=>d.startsWith(currentYear()+'-')):$('view').value==='month'?Object.keys(dataset).filter(d=>d.startsWith(currentMonth()+'-')):[$('date').value];
+ const dates=selectedDates($('view').value,$('date').value,$('date').value);
  const byCompany=new Map();
  const ensure=code=>{if(!byCompany.has(code))byCompany.set(code,{airline:code,expected:0,toProcess:0,saved:0,loaded:0,notLoaded:0,cancelled:0});return byCompany.get(code);};
  for(const date of dates){
@@ -117,11 +117,40 @@ for(const id of ['summaryPeriod','summaryFrom','summaryTo','summaryAirline'])$(i
 
 function dailySummaryFor(date){return (metadata['flux_bags_daily_summary_'+date.slice(0,7)]||{})[date]||[];}
 function companyCodes(){return [...new Set([...Object.keys(companyNames),...Object.keys(dataset).flatMap(date=>dailySummaryFor(date).map(r=>String(r.airline||'').toUpperCase())),...Object.values(dataset).flatMap(rows=>(Array.isArray(rows)?rows:[]).map(r=>String(pick(r,...fields[0])).toUpperCase()))].filter(Boolean))].sort();}
-function selectedDates(period,from,to){return Object.keys(dataset).filter(d=>period==='day'?d===from:period==='month'?d.slice(0,7)===from.slice(0,7):period==='year'?d.slice(0,4)===from.slice(0,4):d>=from&&d<=to).sort();}
+// Compare elapsed portions of the current month/year, not partial periods against full ones.
+function localToday(){const d=new Date();return [d.getFullYear(),String(d.getMonth()+1).padStart(2,'0'),String(d.getDate()).padStart(2,'0')].join('-');}
+function lastDayOfMonth(year,month){return new Date(Date.UTC(year,month,0)).getUTCDate();}
+function selectedDates(period,from,to){
+ const today=localToday(),current=period==='month'&&from.slice(0,7)===today.slice(0,7)||period==='year'&&from.slice(0,4)===today.slice(0,4);
+ return Object.keys(dataset).filter(d=>{
+  if(current&&d>today)return false;
+  return period==='day'?d===from:period==='month'?d.slice(0,7)===from.slice(0,7):period==='year'?d.slice(0,4)===from.slice(0,4):d>=from&&d<=to;
+ }).sort();
+}
 function previousPeriod(period,from){
- if(period==='day'){const d=new Date(from+'T12:00:00Z');if(!Number.isFinite(d.getTime()))return null;d.setUTCDate(d.getUTCDate()-1);const v=d.toISOString().slice(0,10);return {dates:selectedDates('day',v,v),label:'J-1'};}
- if(period==='month'){const d=new Date(from.slice(0,7)+'-01T12:00:00Z');if(!Number.isFinite(d.getTime()))return null;d.setUTCMonth(d.getUTCMonth()-1);const v=d.toISOString().slice(0,7);return {dates:selectedDates('month',v,v),label:'M-1'};}
- if(period==='year'){const v=String(Number(from.slice(0,4))-1);return {dates:selectedDates('year',v,v),label:'N-1'};}
+ const today=localToday(),base=from.slice(0,10);
+ if(period==='day'){
+  const d=new Date(base+'T12:00:00Z');
+  if(!Number.isFinite(d.getTime()))return null;
+  d.setUTCDate(d.getUTCDate()-1);
+  const v=d.toISOString().slice(0,10);
+  return {dates:selectedDates('day',v,v),label:'J-1'};
+ }
+ if(period==='month'){
+  const month=from.slice(0,7),d=new Date(month+'-01T12:00:00Z');
+  if(!Number.isFinite(d.getTime()))return null;
+  d.setUTCMonth(d.getUTCMonth()-1);
+  const previousMonth=d.toISOString().slice(0,7);
+  const isCurrent=month===today.slice(0,7);
+  const last=isCurrent?Math.min(Number(today.slice(8,10)),lastDayOfMonth(d.getUTCFullYear(),d.getUTCMonth()+1)):null;
+  return {dates:selectedDates('month',previousMonth,previousMonth).filter(day=>!isCurrent||Number(day.slice(8,10))<=last),label:'M-1'};
+ }
+ if(period==='year'){
+  const year=from.slice(0,4),previousYear=String(Number(year)-1),isCurrent=year===today.slice(0,4);
+  let cutoff=previousYear+'-'+today.slice(5);
+  if(isCurrent){const month=Number(today.slice(5,7));const day=Math.min(Number(today.slice(8,10)),lastDayOfMonth(Number(previousYear),month));cutoff=previousYear+'-'+String(month).padStart(2,'0')+'-'+String(day).padStart(2,'0');}
+  return {dates:selectedDates('year',previousYear,previousYear).filter(day=>!isCurrent||day<=cutoff),label:'N-1'};
+ }
  return null;
 }
 function deltaHtml(current,previous,label,hasPrevious,key){
