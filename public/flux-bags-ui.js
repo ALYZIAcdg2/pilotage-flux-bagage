@@ -100,8 +100,8 @@ function openSummary(){
  selectedSummaryCompany='';$('summaryCompanySearch').value='';
  const dates=Object.keys(dataset).sort(),raw=$('date').value||dates.at(-1)||new Date().toISOString().slice(0,10),monthly=$('view').value==='month',yearly=$('view').value==='year';
  $('summaryPeriod').value=yearly?'year':monthly?'month':'day';
- $('summaryFrom').type=monthly?'month':'date';
- $('summaryFrom').value=monthly?raw.slice(0,7):(raw.length===7?raw+'-01':raw);
+ $('summaryFrom').type=yearly?'number':monthly?'month':'date';
+ $('summaryFrom').value=yearly?raw.slice(0,4):monthly?raw.slice(0,7):(raw.length===4?raw+'-01-01':raw.length===7?raw+'-01':raw);
  $('summaryTo').value=raw.length===7?raw+'-01':raw;
  const month=$('summaryFrom').value.slice(0,7);
  const codes=[...new Set([...companyCodes(),...(metadata['flux_bags_monthly_'+month]||[]).map(r=>String(r.airline||'').toUpperCase())])].filter(Boolean).sort();
@@ -145,7 +145,7 @@ function groupedMetrics(dates,company){
 }
 function setCompanies(select){const selected=select.value;const codes=companyCodes();select.innerHTML='<option value="">Toutes les compagnies</option>'+codes.map(c=>'<option value="'+esc(c)+'">'+esc(c)+'</option>').join('');select.value=codes.includes(selected)?selected:'';}
 function openCharts(){
- const monthly=$('view').value==='month',yearly=$('view').value==='year';$('chartsPeriod').value=yearly?'year':monthly?'month':'day';$('chartsFrom').type=monthly?'month':'date';$('chartsFrom').value=monthly?$('date').value.slice(0,7):($('date').value.length===7?$('date').value+'-01':$('date').value);$('chartsTo').value=$('date').value.length===7?$('date').value+'-01':$('date').value;setCompanies($('chartsAirline'));$('chartsAirline').value=$('airline').value||'';renderCharts();$('chartsDialog').showModal();
+ const monthly=$('view').value==='month',yearly=$('view').value==='year';$('chartsPeriod').value=yearly?'year':monthly?'month':'day';$('chartsFrom').type=yearly?'number':monthly?'month':'date';$('chartsFrom').value=yearly?$('date').value.slice(0,4):monthly?$('date').value.slice(0,7):($('date').value.length===4?$('date').value+'-01-01':$('date').value.length===7?$('date').value+'-01':$('date').value);$('chartsTo').value=$('date').value.length===7?$('date').value+'-01':$('date').value;setCompanies($('chartsAirline'));$('chartsAirline').value=$('airline').value||'';renderCharts();$('chartsDialog').showModal();
 }
 function renderCharts(){
  $('chartDetail').hidden=true;$('chartSections').hidden=false;
@@ -311,7 +311,7 @@ $('bagForm').onsubmit=async e=>{
   const days=[{date,records}];
   if(bagEditing&&bagEditing.day!==date){const original=[...(dataset[bagEditing.day]||[])];original.splice(bagEditing.index,1);days.push({date:bagEditing.day,records:original});}
   await save({days});dataset[date]=records;if(bagEditing&&bagEditing.day!==date)dataset[bagEditing.day]=days[1].records;
-  const stayMonth=$('view').value==='month';$('date').value=stayMonth?date.slice(0,7):date;syncDateControl();$('airline').value='';$('search').value='';
+  const stayMonth=$('view').value==='month',stayYear=$('view').value==='year';$('date').value=stayYear?date.slice(0,4):stayMonth?date.slice(0,7):date;syncDateControl();$('airline').value='';$('search').value='';
   $('bagDialog').close();render();$('message').textContent='Dossier enregistré dans D1 TEST.';
  }catch(err){$('bagStatus').textContent=err.message;}finally{$('bagSave').disabled=false;}
 };
