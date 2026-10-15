@@ -281,7 +281,7 @@ function renderCharts(){
  const period=$('chartsPeriod').value,from=$('chartsFrom').value,to=$('chartsTo').value,company=$('chartsAirline').value;
  const dates=selectedDates(period,from,to);
  let data=groupedMetrics(dates,company);
- if(period==='month'&&!data.length)data=(metadata['flux_bags_monthly_'+from.slice(0,7)]||[]).filter(r=>!company||String(r.airline).toUpperCase()===company);
+ // No fallback to legacy expected figures: manually entered monthly values only.
  const num=v=>Number(v)||0,fmt=v=>num(v).toLocaleString('fr-FR'),sum=k=>data.reduce((n,r)=>n+num(r[k]),0);
  const colors={saved:'#10b981',loaded:'#3b82f6',notLoaded:'#ef4444',cancelled:'#9b79c9'};
  const segments=[['saved','Sauvés'],['loaded','Chargés'],['notLoaded','Non chargés'],['cancelled','Annulés']];
@@ -477,7 +477,7 @@ function kpiContext(){const month=currentMonth(),monthly=$('view').value==='mont
 function kpiRows(ctx){return ctx.monthly?[...(metadata[ctx.key]||[])]:[...((metadata[ctx.key]||{})[ctx.date]||[])];}
 function renderKpiFields(){
  const ctx=kpiContext(),company=$('kpiCompany').value,record=kpiRows(ctx).find(r=>String(r.airline||'').toUpperCase()===company)||{};
- $('kpiFields').innerHTML=summaryKeys.map((key,i)=>'<label>'+kpiLabels[i]+'<input type="number" min="0" step="1" required name="'+key+'" value="'+esc(record[key]??0)+'"></label>').join('');
+ $('kpiFields').innerHTML=summaryKeys.filter(key=>key!=='expected').map((key,i)=>'<label>'+kpiLabels[summaryKeys.indexOf(key)]+'<input type="number" min="0" step="1" required name="'+key+'" value="'+esc(record[key]??0)+'"></label>').join('');
  $('kpiError').textContent='';
 }
 function editKpi(){
@@ -495,7 +495,7 @@ $('kpiClose').onclick=()=>$('kpiDialog').close();
 $('kpiForm').onsubmit=async event=>{
  event.preventDefault();const ctx=kpiContext(),company=$('kpiCompany').value;if(!company)return;
  const form=new FormData($('kpiForm')),values={};
- for(const key of summaryKeys){const value=Number(form.get(key));if(!Number.isSafeInteger(value)||value<0){$('kpiError').textContent='Les valeurs doivent être des nombres entiers positifs ou nuls.';return;}values[key]=value;}
+ for(const key of summaryKeys.filter(key=>key!=='expected')){const value=Number(form.get(key));if(!Number.isSafeInteger(value)||value<0){$('kpiError').textContent='Les valeurs doivent être des nombres entiers positifs ou nuls.';return;}values[key]=value;}
  const rows=kpiRows(ctx),index=rows.findIndex(r=>String(r.airline||'').toUpperCase()===company);
  const updated={...(index>=0?rows[index]:{airline:company}),...values};
  if(index>=0)rows[index]=updated;else rows.push(updated);
@@ -515,8 +515,8 @@ function kpiFilteredRows(key,company){
  return rows.filter(({r})=>{const status=kpiStatus(r);return key==='saved'?status==='SAUVÉ':key==='loaded'?status==='CHARGÉ':key==='notLoaded'?status==='NON CHARGÉ':key==='cancelled'?status==='ANNULÉ':false;});
 }
 function kpiCompanyStats(key){
- const codes=[...new Set(kpiFilteredRows('toProcess',null).map(({r})=>String(pick(r,...fields[0])).toUpperCase()))].filter(Boolean).sort();
- const metrics=key==='expected'&&!$('search').value.trim()?new Map(summary().map(r=>[r.airline,r.expected])):null;
+ const codes=key==='expected'?[...new Set(summary().filter(r=>r.expected>0).map(r=>r.airline))].sort():[...new Set(kpiFilteredRows('toProcess',null).map(({r})=>String(pick(r,...fields[0])).toUpperCase()))].filter(Boolean).sort();
+ const metrics=key==='expected'?new Map(summary().map(r=>[r.airline,r.expected])):null;
  return codes.map(code=>({code,count:metrics?Number(metrics.get(code)||0):kpiFilteredRows(key,code).reduce((n,item)=>n+countBags(item.r),0)})).filter(item=>item.count>0);
 }
 function openKpiList(index,company=null){
