@@ -36,7 +36,12 @@ function setupUserSession(){
   $('sessionButton').textContent='USER : '+next;
   $('userSessionDialog').close();
  };
- $('userSessionDialog').addEventListener('cancel',e=>{if(!sessionUser)e.preventDefault();});
+ $('userSessionDialog').addEventListener('click',e=>{
+  const dialog=$('userSessionDialog'),rect=dialog.getBoundingClientRect();
+  if(e.clientX<rect.left||e.clientX>rect.right||e.clientY<rect.top||e.clientY>rect.bottom)dialog.close();
+ });
+ // Escape / retour ferme également la fenêtre, même si aucun USER n'a été choisi.
+
  $('sessionButton').textContent=sessionUser?'USER : '+sessionUser:'USER : À CHOISIR';
  if(!sessionUser)openUserSession();
 }
