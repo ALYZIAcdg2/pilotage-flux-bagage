@@ -118,17 +118,17 @@ for(const id of ['summaryPeriod','summaryFrom','summaryTo','summaryAirline'])$(i
 function dailySummaryFor(date){return (metadata['flux_bags_daily_summary_'+date.slice(0,7)]||{})[date]||[];}
 function companyCodes(){return [...new Set([...Object.keys(companyNames),...Object.keys(dataset).flatMap(date=>dailySummaryFor(date).map(r=>String(r.airline||'').toUpperCase())),...Object.values(dataset).flatMap(rows=>(Array.isArray(rows)?rows:[]).map(r=>String(pick(r,...fields[0])).toUpperCase()))].filter(Boolean))].sort();}
 // Compare elapsed portions of the current month/year, not partial periods against full ones.
-function localToday(){const d=new Date();return [d.getFullYear(),String(d.getMonth()+1).padStart(2,'0'),String(d.getDate()).padStart(2,'0')].join('-');}
+function todayLocalIso(){const d=new Date();return [d.getFullYear(),String(d.getMonth()+1).padStart(2,'0'),String(d.getDate()).padStart(2,'0')].join('-');}
 function lastDayOfMonth(year,month){return new Date(Date.UTC(year,month,0)).getUTCDate();}
 function selectedDates(period,from,to){
- const today=localToday(),current=period==='month'&&from.slice(0,7)===today.slice(0,7)||period==='year'&&from.slice(0,4)===today.slice(0,4);
+ const today=todayLocalIso(),current=period==='month'&&from.slice(0,7)===today.slice(0,7)||period==='year'&&from.slice(0,4)===today.slice(0,4);
  return Object.keys(dataset).filter(d=>{
   if(current&&d>today)return false;
   return period==='day'?d===from:period==='month'?d.slice(0,7)===from.slice(0,7):period==='year'?d.slice(0,4)===from.slice(0,4):d>=from&&d<=to;
  }).sort();
 }
 function previousPeriod(period,from){
- const today=localToday(),base=from.slice(0,10);
+ const today=todayLocalIso(),base=from.slice(0,10);
  if(period==='day'){
   const d=new Date(base+'T12:00:00Z');
   if(!Number.isFinite(d.getTime()))return null;
