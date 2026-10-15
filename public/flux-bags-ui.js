@@ -295,7 +295,7 @@ function openBag(day=null,index=null){
  $('bagHistory').hidden=true;$('bagHistoryToggle').hidden=!r;$('bagHistoryToggle').textContent='Afficher l’historique';
  $('bagHistory').innerHTML=(r?((r._history||[]).map(h=>'<div class="history-entry"><strong>'+esc(h.at?(Number.isFinite(Date.parse(h.at))?new Date(h.at).toLocaleString('fr-FR'):h.at):'')+'</strong> · '+(h.user?'<b>USER '+esc(h.user)+'</b> · ':'USER non renseigné · ')+(h.action?'<span>'+esc(h.action)+'</span> · ':'')+(h.changes||[]).map(c=>esc(c.field)+': '+esc(c.old)+' → '+esc(c.new)).join(' · ')+'</div>').join('')||'<small>Aucun historique de modification enregistré.</small>'):'');
  $('bagHistoryToggle').onclick=()=>{const show=$('bagHistory').hidden;$('bagHistory').hidden=!show;$('bagHistoryToggle').textContent=show?'Masquer l’historique':'Afficher l’historique';};
- $('bagTitle').textContent=bagEditing?'Dossier bagage · '+String(pick(r,...fields[3])):'Nouveau dossier';
+ $('bagTitle').textContent=bagEditing?'Dossier bagage':'Nouveau dossier';
  $('bagDate').value=day||new Date(Date.now()-new Date().getTimezoneOffset()*60000).toISOString().slice(0,10);
  $('bagFields').innerHTML=fields.map((keys,i)=>makeBagField(i,r)).join('')+'<label class="bag-closed-field"><input type="checkbox" id="bagClosed" '+(r?.closed===true?'checked':'')+'> DOSSIER CLÔTURÉ</label>';
  (splitBagTags(r?pick(r,...fields[3]):'').length?splitBagTags(pick(r,...fields[3])):['']).forEach(addBagTag);
