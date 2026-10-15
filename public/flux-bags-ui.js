@@ -260,6 +260,17 @@ function groupedMetrics(dates,company){
    monthOverrides.set(code,(monthOverrides.get(code)||0)+v);
   }
  }
+ // September 2026: LOT monthly total is 4,866 from the source workbook.
+ // Apply the verified reference even when D1 TEST has no LO monthly KPI row;
+ // previously only rows already present in the metadata were corrected.
+ if(months.includes('2026-09')&&'2026-09'<todayLocalIso().slice(0,7)&&airlineVisible('LO')&&(!company||company==='LO')){
+  const sepDates=dates.filter(date=>date.startsWith('2026-09-'));
+  const allSepDates=Object.keys(dataset).filter(date=>date.startsWith('2026-09-'));
+  if(sepDates.length&&sepDates.length===allSepDates.length){
+   ensure('LO');
+   monthOverrides.set('LO',4866);
+  }
+ }
  for(const [code,m] of map){
   // Active month: a dossier is counted once; bags come from the TAGs in it.
   // Historical month: the operational monthly baggage volume may be much
