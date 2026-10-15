@@ -519,6 +519,68 @@ function kpiCompanyStats(key){
  const metrics=key==='expected'?new Map(summary().map(r=>[r.airline,r.expected])):null;
  return codes.map(code=>({code,count:metrics?Number(metrics.get(code)||0):kpiFilteredRows(key,code).reduce((n,item)=>n+countBags(item.r),0)})).filter(item=>item.count>0);
 }
+
+const SEPT_2026_EXPECTED_EXCEL={SK:4758,AI:9011,EI:17510,LA:7669,HF:13252,SB:3602,DE:5215,MH:6770,RJ:4421,AV:5214,FI:9141,AT:10427,JU:4332,LO:4866};
+let expectedDialogMonth='';
+function updateExpectedDialogTotal(){
+ const inputs=[...$('expectedBagsRows').querySelectorAll('input[data-expected-company]')];
+ let sum=0;
+ for(const input of inputs){
+  const code=input.dataset.expectedCompany,row=input.closest('.expected-bags-row');
+  row.classList.toggle('disabled',!airlineVisible(code));
+  const value=input.value.trim()===''?null:Number(input.value);
+  if(airlineVisible(code)&&value!==null&&Number.isSafeInteger(value)&&value>=0)sum+=value;
+ }
+ $('expectedBagsTotal').textContent=sum.toLocaleString('fr-FR');
+}
+function openExpectedBagsEditor(){
+ expectedDialogMonth=currentMonth();
+ const month=expectedDialogMonth,codes=[...new Set([...visibilityCodes(),...Object.keys(metadata['flux_bags_expected_'+month]||{}),...(month==='2026-09'?Object.keys(SEPT_2026_EXPECTED_EXCEL):[])])].sort();
+ $('expectedBagsPeriod').textContent='Mois : '+month+' · '+codes.length+' compagnies';
+ $('expectedBagsMessage').textContent='';
+ $('expectedBagsPrefill').hidden=month!=='2026-09';
+ $('expectedBagsRows').innerHTML=codes.map(code=>{
+  const value=monthlyExpected(month,code);
+  return '<div class="expected-bags-row"><div class="expected-bags-company"><img src="https://images.kiwi.com/airlines/64/'+encodeURIComponent(code)+'.png" loading="lazy" alt="" onerror="this.hidden=true"><span class="expected-bags-name"><strong>'+esc(code)+'</strong><small>'+esc(companyNames[code]||'Compagnie')+(airlineVisible(code)?'':' · Masquée')+'</small></span></div><input type="number" min="0" step="1" inputmode="numeric" aria-label="Bagages attendus '+esc(code)+'" data-expected-company="'+esc(code)+'" value="'+(value===null?'':value)+'" placeholder="—"></div>';
+ }).join('');
+ updateExpectedDialogTotal();
+ if(!$('expectedBagsDialog').open)$('expectedBagsDialog').showModal();
+}
+async function saveExpectedBagsEditor(closeAfter){
+ const month=expectedDialogMonth,key='flux_bags_expected_'+month,next={...(metadata[key]||{})};
+ for(const input of $('expectedBagsRows').querySelectorAll('input[data-expected-company]')){
+  const code=input.dataset.expectedCompany,raw=input.value.trim();
+  if(!raw){delete next[code];continue;}
+  const n=Number(raw);
+  if(!Number.isSafeInteger(n)||n<0){$('expectedBagsMessage').textContent='Nombre invalide pour '+code+'.';input.focus();return;}
+  next[code]=n;
+ }
+ const a=$('expectedBagsSave'),b=$('expectedBagsSaveClose');a.disabled=true;b.disabled=true;
+ $('expectedBagsMessage').textContent='Enregistrement en cours…';
+ try{
+  await save({days:[],metadata:{[key]:next}});
+  metadata[key]=next;
+  render();
+  if($('summaryDialog').open)renderSummary();
+  if($('chartsDialog').open)renderCharts();
+  $('expectedBagsMessage').textContent='Enregistré dans TEST · total affiché : '+$('expectedBagsTotal').textContent;
+  if(closeAfter)$('expectedBagsDialog').close();
+ }catch(err){$('expectedBagsMessage').textContent='Erreur : '+err.message;}
+ finally{a.disabled=false;b.disabled=false;}
+}
+$('expectedBagsClose').onclick=()=>$('expectedBagsDialog').close();
+$('expectedBagsRows').oninput=updateExpectedDialogTotal;
+$('expectedBagsPrefill').onclick=()=>{
+ for(const input of $('expectedBagsRows').querySelectorAll('input[data-expected-company]')){
+  const n=SEPT_2026_EXPECTED_EXCEL[input.dataset.expectedCompany];
+  if(n!==undefined)input.value=String(n);
+ }
+ updateExpectedDialogTotal();
+ $('expectedBagsMessage').textContent='14 valeurs de septembre préremplies. Clique sur « Enregistrer et fermer » pour les sauvegarder.';
+};
+$('expectedBagsSave').onclick=()=>saveExpectedBagsEditor(false);
+$('expectedBagsSaveClose').onclick=()=>saveExpectedBagsEditor(true);
+
 function openKpiList(index,company=null){
  selectedKpi=index;kpiCompanyDrill=company;const key=summaryKeys[index],label=kpiNames[index],period=$('view').value==='month'?currentMonth():$('date').value;
  const rows=kpiFilteredRows(key,company);
@@ -551,7 +613,7 @@ $('kpiListBody').onclick=e=>{
  const row=e.target.closest('[data-date][data-index]');if(row){$('kpiListDialog').close();openBag(row.dataset.date,Number(row.dataset.index));}
 };
 $('kpiListBody').onkeydown=e=>{if(e.key==='Enter'||e.key===' '){const row=e.target.closest('[data-date][data-index]');if(row){e.preventDefault();row.click();}}};
-$('kpis').onclick=e=>{const card=e.target.closest('.kpi');if(card)openKpiList([...$('kpis').children].indexOf(card));};
+$('kpis').onclick=e=>{const card=e.target.closest('.kpi');if(!card)return;const index=[...$('kpis').children].indexOf(card);if(index===0)openExpectedBagsEditor();else openKpiList(index);};
 function render(){
  const s=summary(),searchActive=!!$('search').value.trim(),totals=Object.fromEntries(summaryKeys.map(k=>[k,searchActive&&k!=='expected'?kpiFilteredRows(k,null).reduce((n,item)=>n+countBags(item.r),0):s.reduce((n,r)=>n+(Number(r[k])||0),0)]));
  $('kpis').innerHTML=[['NOMBRE DE BAGAGES ATTENDUS',totals.expected],['À TRAITER',totals.toProcess],['SAUVÉS',totals.saved],['CHARGÉS',totals.loaded],['NON CHARGÉS',totals.notLoaded],['ANNULÉS',totals.cancelled]].map(([name,n],i)=>'<div class="kpi" title="Cliquer pour consulter les dossiers du KPI" style="cursor:pointer"><label><span class="kpi-icon">'+kpiIcons[i]+'</span>'+name+'</label><strong>'+n.toLocaleString('fr-FR')+'</strong>'+'</div>').join('');
