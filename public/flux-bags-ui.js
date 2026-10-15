@@ -25,6 +25,13 @@ function setupUserSession(){
  $('sessionButton').textContent=sessionUser?'USER : '+sessionUser:'USER : À CHOISIR';
  if(!sessionUser)openUserSession();
 }
+function openDeletionAudit(){
+ const items=Object.entries(metadata).filter(([key])=>key.startsWith('flux_bags_deleted_')).flatMap(([,rows])=>Array.isArray(rows)?rows:[]).sort((a,b)=>String(b.at||'').localeCompare(String(a.at||'')));
+ $('deletionAuditList').innerHTML=items.length?items.map(item=>'<div class="history-entry"><strong>'+esc(item.at?new Date(item.at).toLocaleString('fr-FR'):'')+'</strong> · <b>USER '+esc(item.user||'Non renseigné')+'</b> · '+esc(item.airline||'')+' / '+esc(item.tagNumber||'')+' · '+esc(item.date||'')+'</div>').join(''):'<p>Aucune suppression enregistrée dans le nouvel historique.</p>';
+ $('deletionAuditDialog').showModal();
+}
+$('deletionAuditButton').onclick=openDeletionAudit;
+$('deletionAuditClose').onclick=()=>$('deletionAuditDialog').close();
 function auditEvent(action,changes=[]){return {at:new Date().toISOString(),user:sessionUser,action,changes};}
 
 let dataset={},metadata={},editing=null,sortColumn=0,sortDirection=1,bagEditing=null;
