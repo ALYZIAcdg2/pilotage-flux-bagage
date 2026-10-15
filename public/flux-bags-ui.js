@@ -210,8 +210,12 @@ function groupedMetrics(dates,company){
   }
  }
  for(const [code,m] of map){
+  // Active month: a dossier is counted once; bags come from the TAGs in it.
+  // Historical month: the operational monthly baggage volume may be much
+  // larger than case records, so prefer the explicitly recorded KPI total.
+  const activeMonth=months.length===1&&months[0]===todayLocalIso().slice(0,7);
   const daily=dailyBagVolumes.get(code);
-  m.expected=monthOverrides.has(code)?monthOverrides.get(code):daily?.total??tagCounts.get(code)??0;
+  m.expected=activeMonth?(tagCounts.get(code)||0):monthOverrides.has(code)?monthOverrides.get(code):daily?.total??tagCounts.get(code)??0;
  }
  return [...map.values()].sort((a,b)=>a.airline.localeCompare(b.airline));
 }
