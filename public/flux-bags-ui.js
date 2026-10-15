@@ -75,12 +75,52 @@ function matchesBagSearch(r,raw){
  if(/^[A-Z]{2,3}$/.test(q))return cie===q;
  return fields.some(keys=>String(pick(r,...keys)).toLocaleUpperCase('fr').includes(q));
 }
-function visibleRows(){const company=$('airline').value,search=$('search').value.trim().toLowerCase();return allRows().filter(({r})=>(!company||String(pick(r,...fields[0])).toUpperCase()===company)&&(!search||matchesBagSearch(r,search))).sort((a,b)=>{const x=sortColumn===0?a.date:sortColumn===5?String(bagCount(a.r)):String(pick(a.r,...fields[sortColumn>5?sortColumn-2:sortColumn-1])),y=sortColumn===0?b.date:sortColumn===5?String(bagCount(b.r)):String(pick(b.r,...fields[sortColumn>5?sortColumn-2:sortColumn-1]));return sortDirection*x.localeCompare(y,'fr',{numeric:true,sensitivity:'base'});});}
+function visibleRows(){const company=$('airline').value,search=$('search').value.trim().toLowerCase();return allRows().filter(({r})=>airlineVisible(pick(r,...fields[0]))&&(!company||String(pick(r,...fields[0])).toUpperCase()===company)&&(!search||matchesBagSearch(r,search))).sort((a,b)=>{const x=sortColumn===0?a.date:sortColumn===5?String(bagCount(a.r)):String(pick(a.r,...fields[sortColumn>5?sortColumn-2:sortColumn-1])),y=sortColumn===0?b.date:sortColumn===5?String(bagCount(b.r)):String(pick(b.r,...fields[sortColumn>5?sortColumn-2:sortColumn-1]));return sortDirection*x.localeCompare(y,'fr',{numeric:true,sensitivity:'base'});});}
 function summary(){
  const dates=selectedDates($('view').value,$('date').value,$('date').value);
  return groupedMetrics(dates,$('airline').value);
 }
 const summaryKeys=['expected','toProcess','saved','loaded','notLoaded','cancelled'];
+
+const AIRLINE_VISIBILITY_KEY='flux_bags_visible_airlines_test_v1';
+let hiddenAirlines=new Set();
+try{
+ const saved=JSON.parse(localStorage.getItem(AIRLINE_VISIBILITY_KEY)||'[]');
+ if(Array.isArray(saved))hiddenAirlines=new Set(saved.filter(code=>/^[A-Z0-9]{2,3}$/.test(code)));
+}catch{}
+const airlineVisible=code=>!hiddenAirlines.has(String(code||'').trim().toUpperCase());
+function persistAirlineVisibility(){try{localStorage.setItem(AIRLINE_VISIBILITY_KEY,JSON.stringify([...hiddenAirlines]));}catch{}}
+function visibilityCodes(){
+ const month=$('date').value.slice(0,7);
+ return [...new Set([
+ ...Object.values(dataset).flatMap(rows=>(Array.isArray(rows)?rows:[]).map(r=>String(pick(r,...fields[0])).trim().toUpperCase())),
+ ...Object.keys(dataset).flatMap(date=>dailySummaryFor(date).map(r=>String(r.airline||'').trim().toUpperCase())),
+ ...Object.entries(metadata).filter(([key])=>key.startsWith('flux_bags_monthly_')).flatMap(([,rows])=>(Array.isArray(rows)?rows:[]).map(r=>String(r.airline||'').trim().toUpperCase())),
+ ...Object.entries(metadata).filter(([key])=>key.startsWith('flux_bags_daily_summary_')).flatMap(([,days])=>Object.values(days||{}).flatMap(rows=>(Array.isArray(rows)?rows:[]).map(r=>String(r.airline||'').trim().toUpperCase())))
+ ])].filter(code=>/^[A-Z0-9]{2,3}$/.test(code)).sort();
+}
+function renderAirlineVisibilityCards(){
+ const codes=visibilityCodes();
+ $('companyVisibilityCards').innerHTML=codes.length?codes.map(code=>'<label class="company-visibility-card"><input type="checkbox" data-airline="'+esc(code)+'" '+(airlineVisible(code)?'checked':'')+'><img src="https://images.kiwi.com/airlines/64/'+encodeURIComponent(code)+'.png" loading="lazy" alt="" onerror="this.hidden=true"><span class="company-visibility-name"><strong>'+esc(code)+'</strong><small>'+esc(companyNames[code]||'Compagnie')+'</small></span></label>').join(''):'<p class="note">Aucune compagnie disponible.</p>';
+}
+function applyAirlineVisibility(){
+ persistAirlineVisibility();renderAirlineVisibilityCards();render();
+ if($('summaryDialog').open)renderSummary();
+ if($('chartsDialog').open)renderCharts();
+}
+function setupAirlineVisibility(){
+ $('companyVisibilityButton').onclick=()=>{renderAirlineVisibilityCards();$('companyVisibilityDialog').showModal();};
+ $('companyVisibilityClose').onclick=()=>$('companyVisibilityDialog').close();
+ $('companyVisibilityAll').onclick=()=>{hiddenAirlines.clear();applyAirlineVisibility();};
+ $('companyVisibilityNone').onclick=()=>{visibilityCodes().forEach(code=>hiddenAirlines.add(code));applyAirlineVisibility();};
+ $('companyVisibilityCards').onchange=e=>{
+  const input=e.target.closest('input[data-airline]');if(!input)return;
+  if(input.checked)hiddenAirlines.delete(input.dataset.airline);
+  else hiddenAirlines.add(input.dataset.airline);
+  applyAirlineVisibility();
+ };
+}
+
 function syncModalDate(prefix){
  const period=$(prefix+'Period').value,from=$(prefix+'From'),to=$(prefix+'To'),monthly=period==='month',yearly=period==='year';
  const v=from.value;from.type=yearly?'number':monthly?'month':'date';if(yearly){from.min='2000';from.max='2100';from.step='1';}from.value=yearly?v.slice(0,4):monthly?v.slice(0,7):(v.length===4?v+'-01-01':v.length===7?v+'-01':v);
@@ -95,7 +135,7 @@ function filteredSummary(){
  return groupedMetrics(dates,airline);
 }
 let selectedSummaryCompany='';
-const companyNames={AI:'AIR INDIA',AT:'ROYAL AIR MAROC',AV:'AVIANCA',DE:'CONDOR',EI:'AER LINGUS',FI:'ICELANDAIR',HF:'AIR CÔTE D’IVOIRE',JU:'AIR SERBIA',KU:'KUWAIT AIRWAYS',LA:'LATAM AIRLINES',LO:'LOT',MH:'MALAYSIA AIRLINES',RJ:'ROYAL JORDANIAN',SB:'AIRCALIN',SK:'SAS',SQ:'SINGAPORE AIRLINES',TK:'TURKISH AIRLINES',TW:'T’WAY',WB:'RWANDAIR'};
+const companyNames={AI:'AIR INDIA',AT:'ROYAL AIR MAROC',AV:'AVIANCA',DE:'CONDOR',EI:'AER LINGUS',FI:'ICELANDAIR',HF:'AIR CÔTE D’IVOIRE',JU:'AIR SERBIA',KU:'KUWAIT AIRWAYS',LA:'LATAM AIRLINES',LO:'LOT',MH:'MALAYSIA AIRLINES',RJ:'ROYAL JORDANIAN',SB:'AIRCALIN',SK:'SAS',SQ:'SINGAPORE AIRLINES',TK:'TURKISH AIRLINES',TW:'T’WAY',WB:'RWANDAIR',LO:'LOT POLISH AIRLINES'};
 function renderCompanyCards(rows){
  const query=$('summaryCompanySearch').value.trim().toLocaleUpperCase('fr');
  const visible=rows.filter(r=>!query||r.airline.includes(query)||(companyNames[r.airline]||'').toLocaleUpperCase('fr').includes(query));
@@ -171,7 +211,7 @@ function groupedMetrics(dates,company){
  for(const date of dates){
   for(const r of dataset[date]||[]){
    const code=String(pick(r,...fields[0])).toUpperCase();
-   if(!code||(company&&company!==code))continue;
+   if(!code||!airlineVisible(code)||(company&&company!==code))continue;
    const m=ensure(code);m.toProcess++;
    tagCounts.set(code,(tagCounts.get(code)||0)+countBags(r));
    const status=normalizeFluxStatus(pick(r,...fields[10]));
@@ -182,7 +222,7 @@ function groupedMetrics(dates,company){
   }
   for(const r of dailySummaryFor(date)){
    const code=String(r.airline||'').toUpperCase();
-   if(!code||(company&&company!==code))continue;
+   if(!code||!airlineVisible(code)||(company&&company!==code))continue;
    ensure(code);
    const v=Number(r.expected);
    if(r.expected!==''&&r.expected!==null&&r.expected!==undefined&&Number.isFinite(v)&&v>=0){
@@ -202,7 +242,7 @@ function groupedMetrics(dates,company){
   if(!fullMonth||!monthFinished)continue;
   for(const row of metadata['flux_bags_monthly_'+month]||[]){
    const code=String(row.airline||'').toUpperCase();
-   if(!code||(company&&company!==code))continue;
+   if(!code||!airlineVisible(code)||(company&&company!==code))continue;
    const v=Number(row.expected);
    if(row.expected===''||row.expected===null||row.expected===undefined||!Number.isFinite(v)||v<0)continue;
    ensure(code);
@@ -458,7 +498,7 @@ let selectedKpi=0,kpiCompanyDrill=null;
 const kpiStatus=r=>String(normalizeFluxStatus(pick(r,...fields[10]))||pick(r,...fields[10])).toUpperCase();
 function kpiFilteredRows(key,company){
  const search=$('search').value.trim().toLocaleLowerCase('fr');
- const rows=allRows().filter(({r})=>(!$('airline').value||String(pick(r,...fields[0])).toUpperCase()===$('airline').value)&&(!company||String(pick(r,...fields[0])).toUpperCase()===company)&&(!search||matchesBagSearch(r,search)));
+ const rows=allRows().filter(({r})=>airlineVisible(pick(r,...fields[0]))&&(!$('airline').value||String(pick(r,...fields[0])).toUpperCase()===$('airline').value)&&(!company||String(pick(r,...fields[0])).toUpperCase()===company)&&(!search||matchesBagSearch(r,search)));
  if(key==='expected'||key==='toProcess')return rows;
  return rows.filter(({r})=>{const status=kpiStatus(r);return key==='saved'?status==='SAUVÉ':key==='loaded'?status==='CHARGÉ':key==='notLoaded'?status==='NON CHARGÉ':key==='cancelled'?status==='ANNULÉ':false;});
 }
@@ -512,7 +552,7 @@ async function load(){
  try{const res=await fetch('/api/data',{cache:'no-store'});if(!res.ok)throw Error('API '+res.status);const json=await res.json();dataset=json.data||{};metadata=json.metadata||{};
  $('lastRefresh').textContent='Actualisation '+new Intl.DateTimeFormat('fr-FR',{hour:'2-digit',minute:'2-digit',hour12:false}).format(new Date());
  const dates=Object.keys(dataset).sort();syncDateControl();
- const codes=[...new Set([...Object.values(dataset).flatMap(rows=>(Array.isArray(rows)?rows:[]).map(r=>String(pick(r,...fields[0])).toUpperCase())),...(metadata['flux_bags_monthly_'+currentMonth()]||[]).map(r=>String(r.airline).toUpperCase())].filter(Boolean))].sort();
+ const codes=visibilityCodes();
  const selected=$('airline').value;$('airline').innerHTML='<option value="">Toutes les compagnies</option>'+codes.map(x=>'<option value="'+esc(x)+'">'+esc(x)+'</option>').join('');$('airline').value=codes.includes(selected)?selected:'';render();
  }catch(e){$('message').textContent='Erreur de chargement : '+e.message;}
 }
@@ -576,4 +616,4 @@ $('excelDownload').onclick=async()=>{
  catch(e){$('excelStatus').textContent='Erreur export Excel : '+e.message;}
  finally{btn.disabled=false;}
 };
-$('headerRefresh').onclick=load;setInterval(()=>{if(!document.querySelector('dialog[open]')&&!document.hidden)load();},15000);document.addEventListener('visibilitychange',()=>{if(!document.hidden&&!document.querySelector('dialog[open]'))load();});$('date').onchange=()=>{updateMonthDisplay();render();};$('airline').onchange=render;$('search').oninput=render;setupUserSession();const today=new Date();const localToday=new Date(today.getTime()-today.getTimezoneOffset()*60000).toISOString().slice(0,10);$('view').value='month';$('date').type='month';$('date').value=localToday.slice(0,7);updateMonthDisplay();load();
+$('headerRefresh').onclick=load;setInterval(()=>{if(!document.querySelector('dialog[open]')&&!document.hidden)load();},15000);document.addEventListener('visibilitychange',()=>{if(!document.hidden&&!document.querySelector('dialog[open]'))load();});$('date').onchange=()=>{updateMonthDisplay();render();};$('airline').onchange=render;$('search').oninput=render;setupUserSession();setupAirlineVisibility();const today=new Date();const localToday=new Date(today.getTime()-today.getTimezoneOffset()*60000).toISOString().slice(0,10);$('view').value='month';$('date').type='month';$('date').value=localToday.slice(0,7);updateMonthDisplay();load();
