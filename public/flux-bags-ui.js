@@ -286,7 +286,7 @@ function openBag(day=null,index=null){
  bagEditing=day!==null&&index!==null?{day,index}:null;
  const r=bagEditing?dataset[day]?.[index]:null;
  $('bagHistory').hidden=true;$('bagHistoryToggle').hidden=!r;$('bagHistoryToggle').textContent='Afficher l’historique';
- $('bagHistory').innerHTML=(r?((r._history||[]).map(h=>'<div class="history-entry"><strong>'+esc(h.at?new Date(h.at).toLocaleString('fr-FR'):'')+'</strong> · '+(h.user?'<b>USER '+esc(h.user)+'</b> · ':'USER non renseigné · ')+(h.action?'<span>'+esc(h.action)+'</span> · ':'')+(h.changes||[]).map(c=>esc(c.field)+': '+esc(c.old)+' → '+esc(c.new)).join(' · ')+'</div>').join('')||'<small>Aucun historique de modification enregistré.</small>'):'');
+ $('bagHistory').innerHTML=(r?((r._history||[]).map(h=>'<div class="history-entry"><strong>'+esc(h.at?(Number.isFinite(Date.parse(h.at))?new Date(h.at).toLocaleString('fr-FR'):h.at):'')+'</strong> · '+(h.user?'<b>USER '+esc(h.user)+'</b> · ':'USER non renseigné · ')+(h.action?'<span>'+esc(h.action)+'</span> · ':'')+(h.changes||[]).map(c=>esc(c.field)+': '+esc(c.old)+' → '+esc(c.new)).join(' · ')+'</div>').join('')||'<small>Aucun historique de modification enregistré.</small>'):'');
  $('bagHistoryToggle').onclick=()=>{const show=$('bagHistory').hidden;$('bagHistory').hidden=!show;$('bagHistoryToggle').textContent=show?'Masquer l’historique':'Afficher l’historique';};
  $('bagTitle').textContent=bagEditing?'Dossier bagage · '+String(pick(r,...fields[3])):'Nouveau dossier';
  $('bagDate').value=day||new Date(Date.now()-new Date().getTimezoneOffset()*60000).toISOString().slice(0,10);
@@ -321,8 +321,10 @@ $('bagDelete').onclick=async()=>{
   const matches=live.map((r,i)=>({r,i})).filter(({r})=>String(pick(r,...fields[0]))===company&&String(pick(r,...fields[3]))===tag);
   if(matches.length!==1||JSON.stringify(matches[0].r)!==JSON.stringify(record))throw Error('Dossier modifié ou ambigu. Actualise la page avant de supprimer.');
   const updated=live.filter((_,i)=>i!==matches[0].i);
-  await save({days:[{date:day,records:updated}]});
-  dataset[day]=updated;bagEditing=null;$('bagDialog').close();render();
+  const auditKey='flux_bags_deleted_'+day.slice(0,7);
+  const deletions=[...(Array.isArray(metadata[auditKey])?metadata[auditKey]:[]),{...auditEvent('SUPPRESSION'),date:day,airline:company,tagNumber:tag,record}];
+  await save({days:[{date:day,records:updated}],metadata:{[auditKey]:deletions}});
+  metadata[auditKey]=deletions;dataset[day]=updated;bagEditing=null;$('bagDialog').close();render();
   $('message').textContent='Dossier '+company+' / '+tag+' supprimé de D1 TEST.';
  }catch(err){$('bagStatus').textContent='Erreur : '+err.message;}
  finally{$('bagDelete').disabled=false;$('bagSave').disabled=false;}
