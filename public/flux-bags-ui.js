@@ -471,40 +471,7 @@ $('bagForm').onsubmit=async e=>{
   $('bagDialog').close();render();$('message').textContent='Dossier enregistré dans D1 TEST.';
  }catch(err){$('bagStatus').textContent=err.message;}finally{$('bagSave').disabled=false;}
 };
-const kpiLabels=['Nombre de bagages attendus','À traiter','Sauvés','Chargés','Non chargés','Annulés'];
 const kpiIcons=['🧳','📋','🛟','✅','⚠️','🚫'];
-function kpiContext(){const month=currentMonth(),monthly=$('view').value==='month',date=monthly?month:$('date').value;return {monthly,date,key:monthly?'flux_bags_monthly_'+month:'flux_bags_daily_summary_'+month};}
-function kpiRows(ctx){return ctx.monthly?[...(metadata[ctx.key]||[])]:[...((metadata[ctx.key]||{})[ctx.date]||[])];}
-function renderKpiFields(){
- const ctx=kpiContext(),company=$('kpiCompany').value,record=kpiRows(ctx).find(r=>String(r.airline||'').toUpperCase()===company)||{};
- $('kpiFields').innerHTML=summaryKeys.filter(key=>key!=='expected').map((key,i)=>'<label>'+kpiLabels[summaryKeys.indexOf(key)]+'<input type="number" min="0" step="1" required name="'+key+'" value="'+esc(record[key]??0)+'"></label>').join('');
- $('kpiError').textContent='';
-}
-function editKpi(){
- const ctx=kpiContext(),codes=[...new Set([...companyCodes(),...kpiRows(ctx).map(r=>String(r.airline||'').toUpperCase())])].filter(Boolean).sort();
- const selected=$('airline').value;
- $('kpiCompany').innerHTML=codes.map(c=>'<option value="'+esc(c)+'">'+esc(c)+'</option>').join('');
- $('kpiCompany').value=codes.includes(selected)?selected:codes[0]||'';
- $('kpiScope').textContent=ctx.monthly?'Période mensuelle : '+ctx.date:'Journée : '+ctx.date;
- $('kpiError').textContent='';
- if(!codes.length){$('kpiError').textContent='Aucune compagnie disponible pour cette période.';$('kpiSave').disabled=true;}else{$('kpiSave').disabled=false;renderKpiFields();}
- $('kpiDialog').showModal();
-}
-$('kpiCompany').onchange=renderKpiFields;
-$('kpiClose').onclick=()=>$('kpiDialog').close();
-$('kpiForm').onsubmit=async event=>{
- event.preventDefault();const ctx=kpiContext(),company=$('kpiCompany').value;if(!company)return;
- const form=new FormData($('kpiForm')),values={};
- for(const key of summaryKeys.filter(key=>key!=='expected')){const value=Number(form.get(key));if(!Number.isSafeInteger(value)||value<0){$('kpiError').textContent='Les valeurs doivent être des nombres entiers positifs ou nuls.';return;}values[key]=value;}
- const rows=kpiRows(ctx),index=rows.findIndex(r=>String(r.airline||'').toUpperCase()===company);
- const updated={...(index>=0?rows[index]:{airline:company}),...values};
- if(index>=0)rows[index]=updated;else rows.push(updated);
- const next=ctx.monthly?rows:{...(metadata[ctx.key]||{}),[ctx.date]:rows};
- $('kpiSave').disabled=true;$('kpiError').textContent='Enregistrement en cours…';
- try{await save({days:[],metadata:{[ctx.key]:next}});metadata[ctx.key]=next;$('kpiDialog').close();render();$('message').textContent='KPI enregistrés pour '+company+' · '+ctx.date+' (base TEST).';}
- catch(err){$('kpiError').textContent='Erreur : '+err.message;}
- finally{$('kpiSave').disabled=false;}
-};
 const kpiNames=['Nombre de bagages attendus','À traiter','Sauvés','Chargés / sauvés','Non chargés','Annulés'];
 let selectedKpi=0,kpiCompanyDrill=null;
 const kpiStatus=r=>String(normalizeFluxStatus(pick(r,...fields[10]))||pick(r,...fields[10])).toUpperCase();
@@ -607,7 +574,6 @@ function filterKpiList(){const q=$('kpiListSearch').value.trim().toLocaleLowerCa
 $('kpiListSearch').oninput=filterKpiList;
 $('kpiListBack').onclick=()=>openKpiList(selectedKpi,null);
 $('kpiListClose').onclick=()=>$('kpiListDialog').close();
-$('kpiListEdit').onclick=()=>{$('kpiListDialog').close();editKpi();};
 $('kpiListBody').onclick=e=>{
  const company=e.target.closest('[data-company]');if(company){openKpiList(selectedKpi,company.dataset.company);return;}
  const row=e.target.closest('[data-date][data-index]');if(row){$('kpiListDialog').close();openBag(row.dataset.date,Number(row.dataset.index));}
