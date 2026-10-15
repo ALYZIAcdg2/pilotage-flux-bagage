@@ -104,7 +104,14 @@ function renderAirlineVisibilityCards(){
  $('companyVisibilityCards').innerHTML=codes.length?codes.map(code=>'<label class="company-visibility-card"><input type="checkbox" data-airline="'+esc(code)+'" '+(airlineVisible(code)?'checked':'')+'><img src="https://images.kiwi.com/airlines/64/'+encodeURIComponent(code)+'.png" loading="lazy" alt="" onerror="this.hidden=true"><span class="company-visibility-name"><strong>'+esc(code)+'</strong><small>'+esc(companyNames[code]||'Compagnie')+'</small></span></label>').join(''):'<p class="note">Aucune compagnie disponible.</p>';
 }
 function applyAirlineVisibility(){
- persistAirlineVisibility();renderAirlineVisibilityCards();render();
+ persistAirlineVisibility();renderAirlineVisibilityCards();
+ const chosen=$('airline').value;
+ const codes=visibilityCodes().filter(airlineVisible);
+ $('airline').innerHTML='<option value="">Toutes les compagnies</option>'+codes.map(code=>'<option value="'+esc(code)+'">'+esc(code)+'</option>').join('');
+ $('airline').value=codes.includes(chosen)?chosen:'';
+ if($('summaryDialog').open&&$('summaryAirline').value&&!airlineVisible($('summaryAirline').value))$('summaryAirline').value='';
+ if($('chartsDialog').open&&$('chartsAirline').value&&!airlineVisible($('chartsAirline').value))$('chartsAirline').value='';
+ render();
  if($('summaryDialog').open)renderSummary();
  if($('chartsDialog').open)renderCharts();
 }
@@ -135,7 +142,7 @@ function filteredSummary(){
  return groupedMetrics(dates,airline);
 }
 let selectedSummaryCompany='';
-const companyNames={AI:'AIR INDIA',AT:'ROYAL AIR MAROC',AV:'AVIANCA',DE:'CONDOR',EI:'AER LINGUS',FI:'ICELANDAIR',HF:'AIR CÔTE D’IVOIRE',JU:'AIR SERBIA',KU:'KUWAIT AIRWAYS',LA:'LATAM AIRLINES',LO:'LOT',MH:'MALAYSIA AIRLINES',RJ:'ROYAL JORDANIAN',SB:'AIRCALIN',SK:'SAS',SQ:'SINGAPORE AIRLINES',TK:'TURKISH AIRLINES',TW:'T’WAY',WB:'RWANDAIR',LO:'LOT POLISH AIRLINES'};
+const companyNames={AI:'AIR INDIA',AT:'ROYAL AIR MAROC',AV:'AVIANCA',DE:'CONDOR',EI:'AER LINGUS',FI:'ICELANDAIR',HF:'AIR CÔTE D’IVOIRE',JU:'AIR SERBIA',KU:'KUWAIT AIRWAYS',LA:'LATAM AIRLINES',LO:'LOT POLISH AIRLINES',MH:'MALAYSIA AIRLINES',RJ:'ROYAL JORDANIAN',SB:'AIRCALIN',SK:'SAS',SQ:'SINGAPORE AIRLINES',TK:'TURKISH AIRLINES',TW:'T’WAY',WB:'RWANDAIR'};
 function renderCompanyCards(rows){
  const query=$('summaryCompanySearch').value.trim().toLocaleUpperCase('fr');
  const visible=rows.filter(r=>!query||r.airline.includes(query)||(companyNames[r.airline]||'').toLocaleUpperCase('fr').includes(query));
@@ -504,7 +511,8 @@ function kpiFilteredRows(key,company){
 }
 function kpiCompanyStats(key){
  const codes=[...new Set(kpiFilteredRows('toProcess',null).map(({r})=>String(pick(r,...fields[0])).toUpperCase()))].filter(Boolean).sort();
- return codes.map(code=>({code,count:kpiFilteredRows(key,code).length})).filter(item=>item.count>0);
+ const metrics=key==='expected'&&!$('search').value.trim()?new Map(summary().map(r=>[r.airline,r.expected])):null;
+ return codes.map(code=>({code,count:metrics?Number(metrics.get(code)||0):key==='expected'?kpiFilteredRows(key,code).reduce((n,item)=>n+countBags(item.r),0):kpiFilteredRows(key,code).length})).filter(item=>item.count>0);
 }
 function openKpiList(index,company=null){
  selectedKpi=index;kpiCompanyDrill=company;const key=summaryKeys[index],label=kpiNames[index],period=$('view').value==='month'?currentMonth():$('date').value;
@@ -516,7 +524,7 @@ function openKpiList(index,company=null){
  const showCompanies=!company&&!$('airline').value&&(key==='expected'||key==='toProcess');
  if(showCompanies){
   const companies=kpiCompanyStats(key);
-  $('kpiListBody').innerHTML='<div class="kpi-companies">'+companies.map(({code,count})=>'<button class="kpi-company" type="button" data-company="'+esc(code)+'"><small>COMPAGNIE</small><strong>'+esc(code)+' · '+count.toLocaleString('fr-FR')+' bagages</strong></button>').join('')+'</div>';
+  $('kpiListBody').innerHTML='<div class="kpi-companies">'+companies.map(({code,count})=>'<button class="kpi-company" type="button" data-company="'+esc(code)+'"><small>COMPAGNIE</small><strong>'+esc(code)+' · '+count.toLocaleString('fr-FR')+(key==='toProcess'?' dossiers':' bagages')+'</strong></button>').join('')+'</div>';
  }else{
   const filtered=rows;
   $('kpiListBody').innerHTML=filtered.length?'<div class="kpi-list">'+filtered.map(({date,index:rowIndex,r})=>{
@@ -552,7 +560,7 @@ async function load(){
  try{const res=await fetch('/api/data',{cache:'no-store'});if(!res.ok)throw Error('API '+res.status);const json=await res.json();dataset=json.data||{};metadata=json.metadata||{};
  $('lastRefresh').textContent='Actualisation '+new Intl.DateTimeFormat('fr-FR',{hour:'2-digit',minute:'2-digit',hour12:false}).format(new Date());
  const dates=Object.keys(dataset).sort();syncDateControl();
- const codes=visibilityCodes();
+ const codes=visibilityCodes().filter(airlineVisible);
  const selected=$('airline').value;$('airline').innerHTML='<option value="">Toutes les compagnies</option>'+codes.map(x=>'<option value="'+esc(x)+'">'+esc(x)+'</option>').join('');$('airline').value=codes.includes(selected)?selected:'';render();
  }catch(e){$('message').textContent='Erreur de chargement : '+e.message;}
 }
