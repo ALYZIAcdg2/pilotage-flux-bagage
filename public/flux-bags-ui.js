@@ -174,7 +174,7 @@ function renderSummary(){
  const period=$('summaryPeriod').value; $('summaryTo').disabled=period!=='range';
  const s=filteredSummary();
  const totals=Object.fromEntries(summaryKeys.map(k=>[k,s.reduce((n,r)=>n+r[k],0)]));
- $('summaryKpis').innerHTML=[['NOMBRE DE BAGAGES',totals.expected],['À TRAITER (dossiers)',totals.toProcess],['SAUVÉS (après action)',totals.saved],['CHARGÉS (après action)',totals.loaded],['NON CHARGÉS (non récupérés)',totals.notLoaded],['ANNULÉS (passager annulé)',totals.cancelled]].map(([label,n],i)=>'<div class="kpi"><label><span class="kpi-icon">'+kpiIcons[i]+'</span>'+label+'</label><strong>'+n.toLocaleString('fr-FR')+'</strong>'+'</div>').join('');
+ $('summaryKpis').innerHTML=[['NOMBRE DE BAGAGES',totals.expected],['À TRAITER (bagages)',totals.toProcess],['SAUVÉS (après action)',totals.saved],['CHARGÉS (après action)',totals.loaded],['NON CHARGÉS (non récupérés)',totals.notLoaded],['ANNULÉS (passager annulé)',totals.cancelled]].map(([label,n],i)=>'<div class="kpi"><label><span class="kpi-icon">'+kpiIcons[i]+'</span>'+label+'</label><strong>'+n.toLocaleString('fr-FR')+'</strong>'+'</div>').join('');
  renderCompanyCards(s);
  $('summaryScope').textContent=period==='month'?'Mois : '+$('summaryFrom').value.slice(0,7):period==='year'?'Année : '+$('summaryFrom').value.slice(0,4):period==='day'?'Journée : '+$('summaryFrom').value:'Du '+$('summaryFrom').value+' au '+$('summaryTo').value;
 }
@@ -219,13 +219,13 @@ function groupedMetrics(dates,company){
   for(const r of dataset[date]||[]){
    const code=String(pick(r,...fields[0])).toUpperCase();
    if(!code||!airlineVisible(code)||(company&&company!==code))continue;
-   const m=ensure(code);m.toProcess++;
-   tagCounts.set(code,(tagCounts.get(code)||0)+countBags(r));
+   const m=ensure(code),bags=countBags(r);m.toProcess+=bags;
+   tagCounts.set(code,(tagCounts.get(code)||0)+bags);
    const status=normalizeFluxStatus(pick(r,...fields[10]));
-   if(status==='SAUVÉ')m.saved++;
-   else if(status==='CHARGÉ')m.loaded++;
-   else if(status==='NON CHARGÉ')m.notLoaded++;
-   else if(status==='ANNULÉ')m.cancelled++;
+   if(status==='SAUVÉ')m.saved+=bags;
+   else if(status==='CHARGÉ')m.loaded+=bags;
+   else if(status==='NON CHARGÉ')m.notLoaded+=bags;
+   else if(status==='ANNULÉ')m.cancelled+=bags;
   }
   for(const r of dailySummaryFor(date)){
    const code=String(r.airline||'').toUpperCase();
@@ -512,7 +512,7 @@ function kpiFilteredRows(key,company){
 function kpiCompanyStats(key){
  const codes=[...new Set(kpiFilteredRows('toProcess',null).map(({r})=>String(pick(r,...fields[0])).toUpperCase()))].filter(Boolean).sort();
  const metrics=key==='expected'&&!$('search').value.trim()?new Map(summary().map(r=>[r.airline,r.expected])):null;
- return codes.map(code=>({code,count:metrics?Number(metrics.get(code)||0):key==='expected'?kpiFilteredRows(key,code).reduce((n,item)=>n+countBags(item.r),0):kpiFilteredRows(key,code).length})).filter(item=>item.count>0);
+ return codes.map(code=>({code,count:metrics?Number(metrics.get(code)||0):kpiFilteredRows(key,code).reduce((n,item)=>n+countBags(item.r),0)})).filter(item=>item.count>0);
 }
 function openKpiList(index,company=null){
  selectedKpi=index;kpiCompanyDrill=company;const key=summaryKeys[index],label=kpiNames[index],period=$('view').value==='month'?currentMonth():$('date').value;
@@ -524,7 +524,7 @@ function openKpiList(index,company=null){
  const showCompanies=!company&&!$('airline').value&&(key==='expected'||key==='toProcess');
  if(showCompanies){
   const companies=kpiCompanyStats(key);
-  $('kpiListBody').innerHTML='<div class="kpi-companies">'+companies.map(({code,count})=>'<button class="kpi-company" type="button" data-company="'+esc(code)+'"><small>COMPAGNIE</small><strong>'+esc(code)+' · '+count.toLocaleString('fr-FR')+(key==='toProcess'?' dossiers':' bagages')+'</strong></button>').join('')+'</div>';
+  $('kpiListBody').innerHTML='<div class="kpi-companies">'+companies.map(({code,count})=>'<button class="kpi-company" type="button" data-company="'+esc(code)+'"><small>COMPAGNIE</small><strong>'+esc(code)+' · '+count.toLocaleString('fr-FR')+' bagages'+'</strong></button>').join('')+'</div>';
  }else{
   const filtered=rows;
   $('kpiListBody').innerHTML=filtered.length?'<div class="kpi-list">'+filtered.map(({date,index:rowIndex,r})=>{
@@ -548,7 +548,7 @@ $('kpiListBody').onclick=e=>{
 $('kpiListBody').onkeydown=e=>{if(e.key==='Enter'||e.key===' '){const row=e.target.closest('[data-date][data-index]');if(row){e.preventDefault();row.click();}}};
 $('kpis').onclick=e=>{const card=e.target.closest('.kpi');if(card)openKpiList([...$('kpis').children].indexOf(card));};
 function render(){
- const s=summary(),searchActive=!!$('search').value.trim(),totals=Object.fromEntries(summaryKeys.map(k=>[k,searchActive?(k==='expected'?kpiFilteredRows(k,null).reduce((n,item)=>n+countBags(item.r),0):kpiFilteredRows(k,null).length):s.reduce((n,r)=>n+(Number(r[k])||0),0)]));
+ const s=summary(),searchActive=!!$('search').value.trim(),totals=Object.fromEntries(summaryKeys.map(k=>[k,searchActive?(kpiFilteredRows(k,null).reduce((n,item)=>n+countBags(item.r),0)):s.reduce((n,r)=>n+(Number(r[k])||0),0)]));
  $('kpis').innerHTML=[['NOMBRE DE BAGAGES',totals.expected],['À TRAITER',totals.toProcess],['SAUVÉS',totals.saved],['CHARGÉS',totals.loaded],['NON CHARGÉS',totals.notLoaded],['ANNULÉS',totals.cancelled]].map(([name,n],i)=>'<div class="kpi" title="Cliquer pour consulter les dossiers du KPI" style="cursor:pointer"><label><span class="kpi-icon">'+kpiIcons[i]+'</span>'+name+'</label><strong>'+n.toLocaleString('fr-FR')+'</strong>'+'</div>').join('');
  const rows=visibleRows();$('rowCount').textContent=rows.length+' dossier(s)';
  $('rows').innerHTML=rows.map(({date,index,r})=>'<tr tabindex="0" role="button" aria-label="Ouvrir dossier '+esc(pick(r,...fields[3]))+'" data-date="'+date+'" data-index="'+index+'">'+fields.map((keys,i)=>{const value=i===10?(normalizeFluxStatus(pick(r,...keys))||pick(r,...keys)||'À qualifier'):pick(r,...keys);if(i===0){const status=String(normalizeFluxStatus(pick(r,...fields[10]))||pick(r,...fields[10])||'').toUpperCase();const cls=r.closed===true?'status-closed':status.includes('ANNUL')?'status-cancelled':status.includes('NON CHARG')?'status-unloaded':status.includes('SAUV')?'status-saved':status.includes('CHARG')?'status-loaded':'status-other';return '<td class="bag-indicator"><span class="status-dot '+cls+' '+(cls==='status-unloaded'?'status-dot-blink':'')+'" title="'+esc(status||'Statut non défini')+'" aria-label="'+esc(status||'Statut non défini')+'"></span></td><td class="bag-date">'+esc(date.split('-').reverse().join('/'))+'</td><td class="bag-company"><strong>'+esc(value)+'</strong></td>';}if(i===3){const tags=splitBagTags(value);return '<td class="bag-tag-cell" title="'+esc(tags.join(' / '))+'"><span class="bag-tag-preview">'+esc(tags[0]||'')+(tags.length>1?' <span class="bag-tag-more">+'+(tags.length-1)+' …</span>':'')+'</span></td><td class="bag-count">'+tags.length+'</td>';}if(i===11){const full=String(value||'').trim(),preview=full.length>32?full.slice(0,32).trimEnd()+'…':full;return '<td class="bag-fault-cell" title="'+esc(full)+'"><span class="bag-fault-preview">'+esc(preview)+'</span></td>';}if(i!==10)return '<td>'+esc(value)+'</td>';const status=String(value).toUpperCase();const cls=status.includes('ANNUL')?'status-cancelled':status.includes('NON CHARG')?'status-unloaded':status.includes('SAUV')?'status-saved':status.includes('CHARG')?'status-loaded':'status-other';return '<td><span class="status-pill '+cls+'">'+esc(value)+'</span></td>';}).join('')+'</tr>').join('')||'<tr><td colspan="15" class="empty">Aucun dossier pour cette sélection</td></tr>';
