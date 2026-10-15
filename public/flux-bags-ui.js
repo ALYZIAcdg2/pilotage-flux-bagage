@@ -281,12 +281,12 @@ const normalizedClock=value=>{const digits=String(value||'').replace(/\\D/g,'');
 function makeBagField(i,r){
  const keys=fields[i],value=r?String(pick(r,...keys)):'',label=['CIE','N° VOL','HEURE DÉPART','N° TAG','VOL APPORT','HEURE ARV.','LOCALISATION','REMARQUES','ANOMALIE','COMMENTAIRE/ACTION','STATUT','FAULT STATION'][i];
  const name='field'+i,common=' name="'+name+'" id="bagField'+i+'" ';
- if(i===0){const choices=[...new Set([...companyCodes(),...Object.values(dataset).flatMap(rows=>(Array.isArray(rows)?rows:[]).map(x=>upper(pick(x,...fields[0])))),upper(value)].filter(Boolean))].sort();return '<label>'+label+'<select '+common+' required><option value="">Choisir une compagnie</option>'+choices.map(c=>'<option value="'+esc(c)+'" '+(upper(value)===c?'selected':'')+'>'+esc(c)+'</option>').join('')+'</select></label>';}
+ if(i===0){const choices=[...new Set([...companyCodes(),...Object.values(dataset).flatMap(rows=>(Array.isArray(rows)?rows:[]).map(x=>upper(pick(x,...fields[0])))),upper(value)].filter(Boolean))].sort();return '<label>'+label+'<select '+common+' required><option value="">Choisir CIE</option>'+choices.map(c=>'<option value="'+esc(c)+'" '+(upper(value)===c?'selected':'')+'>'+esc(c)+'</option>').join('')+'</select></label>';}
  if(i===3)return '<div class="bag-tag-field"><label>'+label+'</label><div id="bagTagRows"></div><button type="button" id="bagTagAdd" class="secondary bag-tag-add" aria-label="Ajouter un TAG">+ Ajouter un TAG</button></div>';
  if(i===2||i===5)return '<label>'+label+'<input '+common+' type="text" inputmode="numeric" placeholder="HH:MM" value="'+esc(normalizedClock(value))+'" maxlength="5"></label>';
  if(i===7)return '<label>'+label+'<input '+common+' list="bagRemarksList" value="'+esc(upper(value))+'" placeholder="Choisir ou saisir une remarque" autocomplete="off"><datalist id="bagRemarksList">'+[...new Set([...remarkChoices,upper(value)].filter(Boolean))].map(x=>'<option value="'+esc(x)+'"></option>').join('')+'</datalist></label>';
- if(i===10)return '<label>'+label+'<select '+common+'>'+['','SAUVÉ','CHARGÉ','NON CHARGÉ','ANNULÉ'].map(x=>'<option value="'+esc(x)+'" '+(upper(value).replace(/E$/,'É')===x?'selected':'')+'>'+esc(x||'Choisir un statut')+'</option>').join('')+'</select></label>';
- if(i===11)return '<label>'+label+'<select '+common+' style="text-transform:none">'+['',...new Set([value,...faultStations].filter(Boolean))].map(x=>'<option value="'+esc(x)+'" '+(x===value?'selected':'')+'>'+esc(x||'Choisir une station / anomalie')+'</option>').join('')+'</select></label>';
+ if(i===10)return '<label>'+label+'<select '+common+'>'+['','SAUVÉ','CHARGÉ','NON CHARGÉ','ANNULÉ'].map(x=>'<option value="'+esc(x)+'" '+(upper(value).replace(/E$/,'É')===x?'selected':'')+'>'+esc(x||'Choisir statut')+'</option>').join('')+'</select></label>';
+ if(i===11)return '<label>'+label+'<select '+common+' style="text-transform:none">'+['',...new Set([value,...faultStations].filter(Boolean))].map(x=>'<option value="'+esc(x)+'" '+(x===value?'selected':'')+'>'+esc(x||'Choisir station')+'</option>').join('')+'</select></label>';
  return '<label>'+label+'<input '+common+' value="'+esc(upper(value))+'" '+(i===3?'required':'')+' autocomplete="off"></label>';
 }
 const bagCount=r=>splitBagTags(pick(r,...fields[3])).length;
@@ -468,7 +468,7 @@ function render(){
 }
 async function load(){
  try{const res=await fetch('/api/data',{cache:'no-store'});if(!res.ok)throw Error('API '+res.status);const json=await res.json();dataset=json.data||{};metadata=json.metadata||{};
- $('lastRefresh').textContent='Dernière actualisation : '+new Intl.DateTimeFormat('fr-FR',{hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false}).format(new Date());
+ $('lastRefresh').textContent='Actualisation '+new Intl.DateTimeFormat('fr-FR',{hour:'2-digit',minute:'2-digit',hour12:false}).format(new Date());
  const dates=Object.keys(dataset).sort();syncDateControl();
  const codes=[...new Set([...Object.values(dataset).flatMap(rows=>(Array.isArray(rows)?rows:[]).map(r=>String(pick(r,...fields[0])).toUpperCase())),...(metadata['flux_bags_monthly_'+currentMonth()]||[]).map(r=>String(r.airline).toUpperCase())].filter(Boolean))].sort();
  const selected=$('airline').value;$('airline').innerHTML='<option value="">Toutes les compagnies</option>'+codes.map(x=>'<option value="'+esc(x)+'">'+esc(x)+'</option>').join('');$('airline').value=codes.includes(selected)?selected:'';render();
