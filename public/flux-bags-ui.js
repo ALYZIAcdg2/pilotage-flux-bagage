@@ -3,19 +3,34 @@ const $=id=>document.getElementById(id);
 const USER_NAMES=['NADIA','CELINE','DEJAN','MAOU','MARK','DIEME','MARYAM','LUCIA','CARO','YASS','SLY','COCO'];
 const USER_SESSION_KEY='flux_bags_test_user_session_v1';
 let sessionUser='';
-try{const stored=localStorage.getItem(USER_SESSION_KEY);if(USER_NAMES.includes(stored))sessionUser=stored;}catch{}
+try{
+ const stored=localStorage.getItem(USER_SESSION_KEY)||'';
+ if(USER_NAMES.includes(stored)||(/^[A-ZÀ-ÖØ-Ý][A-ZÀ-ÖØ-Ý '\-]{1,39}$/.test(stored)&&stored!=='AUTRE'))sessionUser=stored;
+}catch{}
 function requireUser(){if(sessionUser)return sessionUser;openUserSession();return null;}
 function openUserSession(){
- $('sessionUserSelect').value=sessionUser||'';
+ const known=USER_NAMES.includes(sessionUser);
+ $('sessionUserSelect').value=known?sessionUser:sessionUser?'AUTRE':'';
+ $('sessionCustomUser').value=!known?sessionUser:'';
+ $('sessionCustomLabel').hidden=known||!sessionUser;
  $('sessionError').textContent='';
  if(!$('userSessionDialog').open)$('userSessionDialog').showModal();
 }
 function setupUserSession(){
- $('sessionUserSelect').innerHTML='<option value="">— Choisir un utilisateur —</option>'+USER_NAMES.map(name=>'<option value="'+name+'">'+name+'</option>').join('');
+ $('sessionUserSelect').innerHTML='<option value="">— Choisir un utilisateur —</option>'+USER_NAMES.map(name=>'<option value="'+name+'">'+name+'</option>').join('')+'<option value="AUTRE">AUTRE USER — Saisir un nom</option>';
+ $('sessionUserSelect').onchange=()=>{
+  const custom=$('sessionUserSelect').value==='AUTRE';
+  $('sessionCustomLabel').hidden=!custom;
+  $('sessionError').textContent='';
+  if(custom)$('sessionCustomUser').focus();
+ };
  $('sessionButton').onclick=openUserSession;
  $('sessionConfirm').onclick=()=>{
-  const next=$('sessionUserSelect').value;
-  if(!USER_NAMES.includes(next)){$('sessionError').textContent='Sélectionne un utilisateur.';return;}
+  const selected=$('sessionUserSelect').value;
+  const next=selected==='AUTRE' ? $('sessionCustomUser').value.trim().replace(/\s+/g,' ').toLocaleUpperCase('fr-FR') : selected;
+  if(!next||next==='AUTRE'||next.length>40||(!USER_NAMES.includes(next)&&!/^[A-ZÀ-ÖØ-Ý][A-ZÀ-ÖØ-Ý '\-]{1,39}$/.test(next))){
+   $('sessionError').textContent='Sélectionne un USER ou renseigne un nom valide (2 à 40 caractères).';return;
+  }
   sessionUser=next;
   try{localStorage.setItem(USER_SESSION_KEY,next);}catch{}
   $('sessionButton').textContent='USER : '+next;
