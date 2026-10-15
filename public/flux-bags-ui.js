@@ -93,6 +93,7 @@ function persistAirlineVisibility(){try{localStorage.setItem(AIRLINE_VISIBILITY_
 function visibilityCodes(){
  const month=$('date').value.slice(0,7);
  return [...new Set([
+ ...Object.entries(metadata).filter(([key])=>key.startsWith('flux_bags_expected_')).flatMap(([,vals])=>Object.keys(vals||{})),
  ...Object.values(dataset).flatMap(rows=>(Array.isArray(rows)?rows:[]).map(r=>String(pick(r,...fields[0])).trim().toUpperCase())),
  ...Object.keys(dataset).flatMap(date=>dailySummaryFor(date).map(r=>String(r.airline||'').trim().toUpperCase())),
  ...Object.entries(metadata).filter(([key])=>key.startsWith('flux_bags_monthly_')).flatMap(([,rows])=>(Array.isArray(rows)?rows:[]).map(r=>String(r.airline||'').trim().toUpperCase())),
@@ -100,8 +101,33 @@ function visibilityCodes(){
  ])].filter(code=>/^[A-Z0-9]{2,3}$/.test(code)).sort();
 }
 function renderAirlineVisibilityCards(){
- const codes=visibilityCodes();
- $('companyVisibilityCards').innerHTML=codes.length?codes.map(code=>'<label class="company-visibility-card"><input type="checkbox" data-airline="'+esc(code)+'" '+(airlineVisible(code)?'checked':'')+'><img src="https://images.kiwi.com/airlines/64/'+encodeURIComponent(code)+'.png" loading="lazy" alt="" onerror="this.hidden=true"><span class="company-visibility-name"><strong>'+esc(code)+'</strong><small>'+esc(companyNames[code]||'Compagnie')+'</small></span></label>').join(''):'<p class="note">Aucune compagnie disponible.</p>';
+ const codes=visibilityCodes(),month=currentMonth();
+ $('companyVisibilityPeriod').textContent='Mois : '+month+' · Les valeurs sont enregistrées dans la base TEST.';
+ $('companyVisibilityCards').innerHTML=codes.length?codes.map(code=>{
+  const value=monthlyExpected(month,code);
+  return '<div class="company-visibility-card"><input type="checkbox" id="visibleAirline_'+esc(code)+'" data-airline="'+esc(code)+'" '+(airlineVisible(code)?'checked':'')+'><img src="https://images.kiwi.com/airlines/64/'+encodeURIComponent(code)+'.png" loading="lazy" alt="" onerror="this.hidden=true"><label for="visibleAirline_'+esc(code)+'" class="company-visibility-name"><strong>'+esc(code)+'</strong><small>'+esc(companyNames[code]||'Compagnie')+'</small></label><label class="company-visibility-expected">BAGAGES ATTENDUS<input type="number" min="0" step="1" inputmode="numeric" data-expected-airline="'+esc(code)+'" placeholder="Non renseigné" value="'+(value===null?'':value)+'"><small>Saisie manuelle · '+esc(month)+'</small></label><button type="button" class="secondary company-visibility-save" data-save-expected="'+esc(code)+'">Enregistrer</button></div>';
+ }).join(''):'<p class="note">Aucune compagnie disponible.</p>';
+}
+async function saveManualExpected(code){
+ const input=$('companyVisibilityCards').querySelector('input[data-expected-airline="'+code+'"]');
+ if(!input)return;
+ const raw=input.value.trim(),value=raw===''?null:Number(raw);
+ if(raw!==''&&(!Number.isSafeInteger(value)||value<0)){ $('companyVisibilityMessage').textContent='Nombre invalide pour '+code+'.';return; }
+ const month=currentMonth(),key='flux_bags_expected_'+month;
+ const next={...(metadata[key]||{})};
+ if(value===null)delete next[code];else next[code]=value;
+ const button=$('companyVisibilityCards').querySelector('button[data-save-expected="'+code+'"]');
+ button.disabled=true;
+ $('companyVisibilityMessage').textContent='Enregistrement en cours…';
+ try{
+  await save({days:[],metadata:{[key]:next}});
+  metadata[key]=next;
+  $('companyVisibilityMessage').textContent=code+' · '+(value===null?'Valeur effacée':value.toLocaleString('fr-FR')+' bagages attendus')+' pour '+month+' — enregistré.';
+  render();
+  if($('summaryDialog').open)renderSummary();
+  if($('chartsDialog').open)renderCharts();
+ }catch(err){$('companyVisibilityMessage').textContent='Échec de l’enregistrement : '+err.message;}
+ finally{button.disabled=false;}
 }
 function applyAirlineVisibility(){
  persistAirlineVisibility();renderAirlineVisibilityCards();
@@ -120,6 +146,7 @@ function setupAirlineVisibility(){
  $('companyVisibilityClose').onclick=()=>$('companyVisibilityDialog').close();
  $('companyVisibilityAll').onclick=()=>{hiddenAirlines.clear();applyAirlineVisibility();};
  $('companyVisibilityNone').onclick=()=>{visibilityCodes().forEach(code=>hiddenAirlines.add(code));applyAirlineVisibility();};
+ $('companyVisibilityCards').onclick=e=>{const button=e.target.closest('button[data-save-expected]');if(button)saveManualExpected(button.dataset.saveExpected);};
  $('companyVisibilityCards').onchange=e=>{
   const input=e.target.closest('input[data-airline]');if(!input)return;
   if(input.checked)hiddenAirlines.delete(input.dataset.airline);
@@ -174,7 +201,7 @@ function renderSummary(){
  const period=$('summaryPeriod').value; $('summaryTo').disabled=period!=='range';
  const s=filteredSummary();
  const totals=Object.fromEntries(summaryKeys.map(k=>[k,s.reduce((n,r)=>n+r[k],0)]));
- $('summaryKpis').innerHTML=[['NOMBRE DE BAGAGES',totals.expected],['À TRAITER (bagages)',totals.toProcess],['SAUVÉS (après action)',totals.saved],['CHARGÉS (après action)',totals.loaded],['NON CHARGÉS (non récupérés)',totals.notLoaded],['ANNULÉS (passager annulé)',totals.cancelled]].map(([label,n],i)=>'<div class="kpi"><label><span class="kpi-icon">'+kpiIcons[i]+'</span>'+label+'</label><strong>'+n.toLocaleString('fr-FR')+'</strong>'+'</div>').join('');
+ $('summaryKpis').innerHTML=[['NOMBRE DE BAGAGES ATTENDUS',totals.expected],['À TRAITER (bagages)',totals.toProcess],['SAUVÉS (après action)',totals.saved],['CHARGÉS (après action)',totals.loaded],['NON CHARGÉS (non récupérés)',totals.notLoaded],['ANNULÉS (passager annulé)',totals.cancelled]].map(([label,n],i)=>'<div class="kpi"><label><span class="kpi-icon">'+kpiIcons[i]+'</span>'+label+'</label><strong>'+n.toLocaleString('fr-FR')+'</strong>'+'</div>').join('');
  renderCompanyCards(s);
  $('summaryScope').textContent=period==='month'?'Mois : '+$('summaryFrom').value.slice(0,7):period==='year'?'Année : '+$('summaryFrom').value.slice(0,4):period==='day'?'Journée : '+$('summaryFrom').value:'Du '+$('summaryFrom').value+' au '+$('summaryTo').value;
 }
@@ -211,73 +238,36 @@ function selectedDates(period,from,to){
 }
 // The monthly/daily KPI 'expected' is the overall baggage volume, not the
 // number of baggage case records (which is represented by 'toProcess').
+// Expected baggage is an independently entered MONTHLY operational value.
+// Never derive it from case dossiers, TAG counts or status outcomes.
+function monthlyExpected(month,code){
+ const record=(metadata['flux_bags_expected_'+month]||{})[code];
+ return Number.isSafeInteger(record)&&record>=0?record:null;
+}
 function groupedMetrics(dates,company){
- const map=new Map(),tagCounts=new Map();
+ const map=new Map();
  const ensure=code=>{if(!map.has(code))map.set(code,{airline:code,...Object.fromEntries(summaryKeys.map(k=>[k,0]))});return map.get(code);};
- const dailyBagVolumes=new Map();
  for(const date of dates){
   for(const r of dataset[date]||[]){
    const code=String(pick(r,...fields[0])).toUpperCase();
    if(!code||!airlineVisible(code)||(company&&company!==code))continue;
    const m=ensure(code),bags=countBags(r);m.toProcess+=bags;
-   tagCounts.set(code,(tagCounts.get(code)||0)+bags);
    const status=normalizeFluxStatus(pick(r,...fields[10]));
    if(status==='SAUVÉ')m.saved+=bags;
    else if(status==='CHARGÉ')m.loaded+=bags;
    else if(status==='NON CHARGÉ')m.notLoaded+=bags;
    else if(status==='ANNULÉ')m.cancelled+=bags;
   }
-  for(const r of dailySummaryFor(date)){
-   const code=String(r.airline||'').toUpperCase();
-   if(!code||!airlineVisible(code)||(company&&company!==code))continue;
-   ensure(code);
-   const v=Number(r.expected);
-   if(r.expected!==''&&r.expected!==null&&r.expected!==undefined&&Number.isFinite(v)&&v>=0){
-    const item=dailyBagVolumes.get(code)||{total:0,dates:new Set()};
-    item.total+=v;item.dates.add(date);dailyBagVolumes.set(code,item);
-   }
-  }
  }
- // Monthly totals are authoritative for full, past calendar months.
- // Daily metadata covers selected days when a monthly total is not applicable.
+ // A monthly entry is counted once per month and airline, not once per dossier.
  const months=[...new Set(dates.map(date=>date.slice(0,7)))];
- const monthOverrides=new Map();
  for(const month of months){
-  const monthDays=dates.filter(date=>date.startsWith(month+'-'));
-  const fullMonth=monthDays.length===Object.keys(dataset).filter(date=>date.startsWith(month+'-')).length;
-  const monthFinished=month<todayLocalIso().slice(0,7);
-  if(!fullMonth||!monthFinished)continue;
-  for(const row of metadata['flux_bags_monthly_'+month]||[]){
-   const code=String(row.airline||'').toUpperCase();
-   if(!code||!airlineVisible(code)||(company&&company!==code))continue;
-   // TEST only: September 2026 workbook records 4,866 LO expected bags,
-   // distinct from its 102 baggage cases. D1 TEST metadata currently uses 102.
-   // This temporary reference correction must not affect any other period.
-   const v=(month==='2026-09'&&code==='LO')?4866:Number(row.expected);
-   if(month==='2026-09'&&code==='LO'){ensure(code);monthOverrides.set(code,(monthOverrides.get(code)||0)+v);continue;}
-   if(row.expected===''||row.expected===null||row.expected===undefined||!Number.isFinite(v)||v<0)continue;
-   ensure(code);
-   monthOverrides.set(code,(monthOverrides.get(code)||0)+v);
+  const entries=metadata['flux_bags_expected_'+month]||{};
+  for(const [code,expected] of Object.entries(entries)){
+   if(!airlineVisible(code)||(company&&company!==code))continue;
+   if(!Number.isSafeInteger(expected)||expected<0)continue;
+   ensure(code).expected+=expected;
   }
- }
- // September 2026: LOT monthly total is 4,866 from the source workbook.
- // Apply the verified reference even when D1 TEST has no LO monthly KPI row;
- // previously only rows already present in the metadata were corrected.
- if(months.includes('2026-09')&&'2026-09'<todayLocalIso().slice(0,7)&&airlineVisible('LO')&&(!company||company==='LO')){
-  const sepDates=dates.filter(date=>date.startsWith('2026-09-'));
-  const allSepDates=Object.keys(dataset).filter(date=>date.startsWith('2026-09-'));
-  if(sepDates.length&&sepDates.length===allSepDates.length){
-   ensure('LO');
-   monthOverrides.set('LO',4866);
-  }
- }
- for(const [code,m] of map){
-  // Active month: a dossier is counted once; bags come from the TAGs in it.
-  // Historical month: the operational monthly baggage volume may be much
-  // larger than case records, so prefer the explicitly recorded KPI total.
-  const activeMonth=months.length===1&&months[0]===todayLocalIso().slice(0,7);
-  const daily=dailyBagVolumes.get(code);
-  m.expected=activeMonth?(tagCounts.get(code)||0):monthOverrides.has(code)?monthOverrides.get(code):daily?.total??tagCounts.get(code)??0;
  }
  return [...map.values()].sort((a,b)=>a.airline.localeCompare(b.airline));
 }
@@ -481,7 +471,7 @@ $('bagForm').onsubmit=async e=>{
   $('bagDialog').close();render();$('message').textContent='Dossier enregistré dans D1 TEST.';
  }catch(err){$('bagStatus').textContent=err.message;}finally{$('bagSave').disabled=false;}
 };
-const kpiLabels=['Nombre de bagages','À traiter','Sauvés','Chargés','Non chargés','Annulés'];
+const kpiLabels=['Nombre de bagages attendus','À traiter','Sauvés','Chargés','Non chargés','Annulés'];
 const kpiIcons=['🧳','📋','🛟','✅','⚠️','🚫'];
 function kpiContext(){const month=currentMonth(),monthly=$('view').value==='month',date=monthly?month:$('date').value;return {monthly,date,key:monthly?'flux_bags_monthly_'+month:'flux_bags_daily_summary_'+month};}
 function kpiRows(ctx){return ctx.monthly?[...(metadata[ctx.key]||[])]:[...((metadata[ctx.key]||{})[ctx.date]||[])];}
@@ -515,7 +505,7 @@ $('kpiForm').onsubmit=async event=>{
  catch(err){$('kpiError').textContent='Erreur : '+err.message;}
  finally{$('kpiSave').disabled=false;}
 };
-const kpiNames=['Nombre de bagages','À traiter','Sauvés','Chargés / sauvés','Non chargés','Annulés'];
+const kpiNames=['Nombre de bagages attendus','À traiter','Sauvés','Chargés / sauvés','Non chargés','Annulés'];
 let selectedKpi=0,kpiCompanyDrill=null;
 const kpiStatus=r=>String(normalizeFluxStatus(pick(r,...fields[10]))||pick(r,...fields[10])).toUpperCase();
 function kpiFilteredRows(key,company){
@@ -563,8 +553,8 @@ $('kpiListBody').onclick=e=>{
 $('kpiListBody').onkeydown=e=>{if(e.key==='Enter'||e.key===' '){const row=e.target.closest('[data-date][data-index]');if(row){e.preventDefault();row.click();}}};
 $('kpis').onclick=e=>{const card=e.target.closest('.kpi');if(card)openKpiList([...$('kpis').children].indexOf(card));};
 function render(){
- const s=summary(),searchActive=!!$('search').value.trim(),totals=Object.fromEntries(summaryKeys.map(k=>[k,searchActive?(kpiFilteredRows(k,null).reduce((n,item)=>n+countBags(item.r),0)):s.reduce((n,r)=>n+(Number(r[k])||0),0)]));
- $('kpis').innerHTML=[['NOMBRE DE BAGAGES',totals.expected],['À TRAITER',totals.toProcess],['SAUVÉS',totals.saved],['CHARGÉS',totals.loaded],['NON CHARGÉS',totals.notLoaded],['ANNULÉS',totals.cancelled]].map(([name,n],i)=>'<div class="kpi" title="Cliquer pour consulter les dossiers du KPI" style="cursor:pointer"><label><span class="kpi-icon">'+kpiIcons[i]+'</span>'+name+'</label><strong>'+n.toLocaleString('fr-FR')+'</strong>'+'</div>').join('');
+ const s=summary(),searchActive=!!$('search').value.trim(),totals=Object.fromEntries(summaryKeys.map(k=>[k,searchActive&&k!=='expected'?kpiFilteredRows(k,null).reduce((n,item)=>n+countBags(item.r),0):s.reduce((n,r)=>n+(Number(r[k])||0),0)]));
+ $('kpis').innerHTML=[['NOMBRE DE BAGAGES ATTENDUS',totals.expected],['À TRAITER',totals.toProcess],['SAUVÉS',totals.saved],['CHARGÉS',totals.loaded],['NON CHARGÉS',totals.notLoaded],['ANNULÉS',totals.cancelled]].map(([name,n],i)=>'<div class="kpi" title="Cliquer pour consulter les dossiers du KPI" style="cursor:pointer"><label><span class="kpi-icon">'+kpiIcons[i]+'</span>'+name+'</label><strong>'+n.toLocaleString('fr-FR')+'</strong>'+'</div>').join('');
  const rows=visibleRows();$('rowCount').textContent=rows.length+' dossier(s)';
  $('rows').innerHTML=rows.map(({date,index,r})=>'<tr tabindex="0" role="button" aria-label="Ouvrir dossier '+esc(pick(r,...fields[3]))+'" data-date="'+date+'" data-index="'+index+'">'+fields.map((keys,i)=>{const value=i===10?(normalizeFluxStatus(pick(r,...keys))||pick(r,...keys)||'À qualifier'):pick(r,...keys);if(i===0){const status=String(normalizeFluxStatus(pick(r,...fields[10]))||pick(r,...fields[10])||'').toUpperCase();const cls=r.closed===true?'status-closed':status.includes('ANNUL')?'status-cancelled':status.includes('NON CHARG')?'status-unloaded':status.includes('SAUV')?'status-saved':status.includes('CHARG')?'status-loaded':'status-other';return '<td class="bag-indicator"><span class="status-dot '+cls+' '+(cls==='status-unloaded'?'status-dot-blink':'')+'" title="'+esc(status||'Statut non défini')+'" aria-label="'+esc(status||'Statut non défini')+'"></span></td><td class="bag-date">'+esc(date.split('-').reverse().join('/'))+'</td><td class="bag-company"><strong>'+esc(value)+'</strong></td>';}if(i===3){const tags=splitBagTags(value);return '<td class="bag-tag-cell" title="'+esc(tags.join(' / '))+'"><span class="bag-tag-preview">'+esc(tags[0]||'')+(tags.length>1?' <span class="bag-tag-more">+'+(tags.length-1)+' …</span>':'')+'</span></td><td class="bag-count">'+tags.length+'</td>';}if(i===11){const full=String(value||'').trim(),preview=full.length>32?full.slice(0,32).trimEnd()+'…':full;return '<td class="bag-fault-cell" title="'+esc(full)+'"><span class="bag-fault-preview">'+esc(preview)+'</span></td>';}if(i!==10)return '<td>'+esc(value)+'</td>';const status=String(value).toUpperCase();const cls=status.includes('ANNUL')?'status-cancelled':status.includes('NON CHARG')?'status-unloaded':status.includes('SAUV')?'status-saved':status.includes('CHARG')?'status-loaded':'status-other';return '<td><span class="status-pill '+cls+'">'+esc(value)+'</span></td>';}).join('')+'</tr>').join('')||'<tr><td colspan="15" class="empty">Aucun dossier pour cette sélection</td></tr>';
  document.querySelectorAll('.bagtable th').forEach((th,i)=>{if(i===0){th.textContent='';th.removeAttribute('aria-sort');return;}const column=i-1;th.setAttribute('aria-sort',column===sortColumn?(sortDirection===1?'ascending':'descending'):'none');th.innerHTML='<span class="th-inner"><span>'+esc(column===0?'DATE':names[column])+'</span><span class="sort-triangle" aria-hidden="true">'+(column===sortColumn?(sortDirection===1?'▲':'▼'):'▴')+'</span></span>';});
