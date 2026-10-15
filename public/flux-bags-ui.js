@@ -309,9 +309,34 @@ function updateBagPrefixes(){
  const apply=(input)=>{let value=upper(input.value.trim());if(old&&value.startsWith(old))value=value.slice(old.length);if(value.startsWith(company))value=value.slice(company.length);if(!value||/^\d+$/.test(value))input.value=company+value;};
  apply(flight);tags.forEach(apply);$('bagField0').dataset.previous=company;
 }
+function dossierAuditSummary(record){
+ const box=$('bagAuditSummary');
+ if(!record){box.hidden=true;box.innerHTML='';return;}
+ const history=Array.isArray(record._history)?record._history:[];
+ const creation=history.find(event=>event.action==='CRÉATION');
+ const changes=history.filter(event=>event.action==='MODIFICATION');
+ const latest=changes.length?changes[changes.length-1]:null;
+ const formatStamp=(value,includeTime)=>{
+  if(!value)return 'Non renseigné';
+  const d=new Date(value);
+  if(!Number.isFinite(d.getTime()))return 'Non renseigné';
+  return new Intl.DateTimeFormat('fr-FR',includeTime?{day:'2-digit',month:'2-digit',year:'2-digit',hour:'2-digit',minute:'2-digit'}:{day:'2-digit',month:'2-digit',year:'2-digit'}).format(d);
+ };
+ const createdAt=record.createdAt||creation?.at;
+ const createdBy=record.createdBy||creation?.user;
+ const lines=['<div>Créé le : <strong>'+esc(formatStamp(createdAt,true))+'</strong></div>',
+              '<div>Par : <strong>'+esc(createdBy||'Non renseigné')+'</strong></div>'];
+ if(latest){
+  lines.push('<div>Modifié le : <strong>'+esc(formatStamp(latest.at,false))+'</strong></div>');
+  lines.push('<div>Par : <strong>'+esc(latest.user||'Non renseigné')+'</strong></div>');
+ }
+ box.innerHTML=lines.join('');
+ box.hidden=false;
+}
 function openBag(day=null,index=null){
  bagEditing=day!==null&&index!==null?{day,index}:null;
  const r=bagEditing?dataset[day]?.[index]:null;
+ dossierAuditSummary(r);
  $('bagHistory').hidden=true;$('bagHistoryToggle').hidden=!r;$('bagHistoryToggle').textContent='Afficher l’historique';
  $('bagHistory').innerHTML=(r?((r._history||[]).map(h=>'<div class="history-entry"><strong>'+esc(h.at?(Number.isFinite(Date.parse(h.at))?new Date(h.at).toLocaleString('fr-FR'):h.at):'')+'</strong> · '+(h.user?'<b>USER '+esc(h.user)+'</b> · ':'USER non renseigné · ')+(h.action?'<span>'+esc(h.action)+'</span> · ':'')+(h.changes||[]).map(c=>esc(c.field)+': '+esc(c.old)+' → '+esc(c.new)).join(' · ')+'</div>').join('')||'<small>Aucun historique de modification enregistré.</small>'):'');
  $('bagHistoryToggle').onclick=()=>{const show=$('bagHistory').hidden;$('bagHistory').hidden=!show;$('bagHistoryToggle').textContent=show?'Masquer l’historique':'Afficher l’historique';};
