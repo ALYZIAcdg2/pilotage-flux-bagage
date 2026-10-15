@@ -201,6 +201,14 @@ header nav .last-refresh{flex:0 1 auto;min-width:0;white-space:nowrap;overflow:h
 .bagtable .status-dot.status-other{background:#64748b!important}
 .kpi-delta{display:block;margin-top:5px;font-size:11px;font-weight:700}
 .kpi-delta.positive{color:#15803d}.kpi-delta.negative{color:#dc2626}.kpi-delta.neutral{color:#64748b}
+
+/* Fix iPhone: month/date picker must remain inside its half-width filter column. */
+@media(max-width:850px){
+ main>.panel.tools>label{flex:1 1 calc(50% - 8px);width:calc(50% - 4px);min-width:0;max-width:calc(50% - 4px)}
+ main>.panel.tools>label>input,main>.panel.tools>label>select{display:block;min-width:0;max-width:100%;width:100%;box-sizing:border-box}
+ #dateLabel{min-width:0!important}
+ #date{min-width:0!important;width:100%!important;max-width:100%!important}
+}
 </style></head><body><header><div><h1>PILOTAGE FLUX BAGAGE</h1><small>Compte rendu pilotage · environnement de TEST</small></div><nav><span id="lastRefresh" class="last-refresh" aria-live="polite">Dernière actualisation : —</span><button id="headerRefresh" class="secondary" type="button">↻ Actualiser</button><details class="tools-menu"><summary>⚙ Outils</summary><div><a href="/flux-bags-import.html" class="tools-import">📥 IMPORTER</a><button type="button" id="export" class="secondary">📊 EXPORT EXCEL</button></div></details></nav></header><main>
 <div class="panel tools"><label>PÉRIODE<select id="view"><option value="day">Jour</option><option value="month">Mois</option><option value="year">Année</option></select></label><label id="dateLabel">Date<input type="date" id="date"></label><label>Compagnie<select id="airline"><option value="">Toutes les compagnies</option></select></label><label>Rechercher<input type="search" id="search" placeholder="Vol, tag, localisation…"></label><button id="newBagButton" class="new-bag-green">+ Nouveau dossier</button><button id="summaryButton" class="secondary">RÉCAPITULATIF</button><button id="remarkButton">Remarques</button><button id="chartsButton" class="secondary" aria-label="Graphiques" title="Graphiques">▥</button></div>
 <div id="message"></div><div id="kpis" class="kpis"></div>
