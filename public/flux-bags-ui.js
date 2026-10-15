@@ -1,5 +1,32 @@
 import {normalizeFluxStatus} from './flux-bags-model.js';
 const $=id=>document.getElementById(id);
+const USER_NAMES=['NADIA','CELINE','DEJAN','MAOU','MARK','DIEME','MARYAM','LUCIA','CARO','YASS','SLY','COCO'];
+const USER_SESSION_KEY='flux_bags_test_user_session_v1';
+let sessionUser='';
+try{const stored=localStorage.getItem(USER_SESSION_KEY);if(USER_NAMES.includes(stored))sessionUser=stored;}catch{}
+function requireUser(){if(sessionUser)return sessionUser;openUserSession();return null;}
+function openUserSession(){
+ $('sessionUserSelect').value=sessionUser||'';
+ $('sessionError').textContent='';
+ if(!$('userSessionDialog').open)$('userSessionDialog').showModal();
+}
+function setupUserSession(){
+ $('sessionUserSelect').innerHTML='<option value="">— Choisir un utilisateur —</option>'+USER_NAMES.map(name=>'<option value="'+name+'">'+name+'</option>').join('');
+ $('sessionButton').onclick=openUserSession;
+ $('sessionConfirm').onclick=()=>{
+  const next=$('sessionUserSelect').value;
+  if(!USER_NAMES.includes(next)){$('sessionError').textContent='Sélectionne un utilisateur.';return;}
+  sessionUser=next;
+  try{localStorage.setItem(USER_SESSION_KEY,next);}catch{}
+  $('sessionButton').textContent='USER : '+next;
+  $('userSessionDialog').close();
+ };
+ $('userSessionDialog').addEventListener('cancel',e=>{if(!sessionUser)e.preventDefault();});
+ $('sessionButton').textContent=sessionUser?'USER : '+sessionUser:'USER : À CHOISIR';
+ if(!sessionUser)openUserSession();
+}
+function auditEvent(action,changes=[]){return {at:new Date().toISOString(),user:sessionUser,action,changes};}
+
 let dataset={},metadata={},editing=null,sortColumn=0,sortDirection=1,bagEditing=null;
 const esc=x=>String(x??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const pick=(r,...keys)=>keys.map(k=>r?.[k]).find(v=>v!==undefined&&v!==null&&v!=='')??'';
@@ -259,7 +286,7 @@ function openBag(day=null,index=null){
  bagEditing=day!==null&&index!==null?{day,index}:null;
  const r=bagEditing?dataset[day]?.[index]:null;
  $('bagHistory').hidden=true;$('bagHistoryToggle').hidden=!r;$('bagHistoryToggle').textContent='Afficher l’historique';
- $('bagHistory').innerHTML=(r?((r._history||[]).map(h=>'<div class="history-entry"><strong>'+esc(h.at||'')+'</strong> · '+(h.changes||[]).map(c=>esc(c.field)+': '+esc(c.old)+' → '+esc(c.new)).join(' · ')+'</div>').join('')||'<small>Aucun historique de modification enregistré.</small>'):'');
+ $('bagHistory').innerHTML=(r?((r._history||[]).map(h=>'<div class="history-entry"><strong>'+esc(h.at?new Date(h.at).toLocaleString('fr-FR'):'')+'</strong> · '+(h.user?'<b>USER '+esc(h.user)+'</b> · ':'USER non renseigné · ')+(h.action?'<span>'+esc(h.action)+'</span> · ':'')+(h.changes||[]).map(c=>esc(c.field)+': '+esc(c.old)+' → '+esc(c.new)).join(' · ')+'</div>').join('')||'<small>Aucun historique de modification enregistré.</small>'):'');
  $('bagHistoryToggle').onclick=()=>{const show=$('bagHistory').hidden;$('bagHistory').hidden=!show;$('bagHistoryToggle').textContent=show?'Masquer l’historique':'Afficher l’historique';};
  $('bagTitle').textContent=bagEditing?'Dossier bagage · '+String(pick(r,...fields[3])):'Nouveau dossier';
  $('bagDate').value=day||new Date(Date.now()-new Date().getTimezoneOffset()*60000).toISOString().slice(0,10);
@@ -277,6 +304,7 @@ function openBag(day=null,index=null){
 }
 $('newBagButton').onclick=()=>openBag();$('bagClose').onclick=()=>$('bagDialog').close();
 $('bagDelete').onclick=async()=>{
+ if(!requireUser())return;
  if(!bagEditing)return;
  const {day,index}=bagEditing;
  const original=dataset[day]||[];
@@ -300,7 +328,7 @@ $('bagDelete').onclick=async()=>{
  finally{$('bagDelete').disabled=false;$('bagSave').disabled=false;}
 };
 $('bagForm').onsubmit=async e=>{
- e.preventDefault();const date=$('bagDate').value;
+ e.preventDefault();if(!requireUser()){$('bagStatus').textContent='Choisis ta session USER avant d’enregistrer.';return;}const date=$('bagDate').value;
  if(!/^\d{4}-\d{2}-\d{2}$/.test(date)){$('bagStatus').textContent='Date invalide';return;}
  const row={};fields.forEach((keys,i)=>row[keys[0]]=i===3?bagTags().join(' / '):i===11?$('bagForm').elements['field'+i].value.trim():upper($('bagForm').elements['field'+i].value.trim()));
  if(new Set(bagTags()).size!==bagTags().length){$('bagStatus').textContent='Un numéro de TAG est présent plusieurs fois dans ce dossier.';return;}
@@ -308,7 +336,7 @@ $('bagForm').onsubmit=async e=>{
  for(const key of ['departureTime','arrivalTime']){if(row[key]&&!/^([01]\d|2[0-3]):[0-5]\d$/.test(row[key])){$('bagStatus').textContent='Heure invalide : utiliser HH:MM';return;}}
  const previous=bagEditing?dataset[bagEditing.day]?.[bagEditing.index]:null;
  const updated={...(previous||{}),...row,closed:$('bagClosed').checked};
- if(previous){const changes=fields.map((keys,i)=>({field:names[i+1]||keys[0],old:String(pick(previous,...keys)),new:String(row[keys[0]]??'')})).filter(c=>c.old!==c.new);if(Boolean(previous.closed)!==updated.closed)changes.push({field:'DOSSIER CLÔTURÉ',old:previous.closed?'OUI':'NON',new:updated.closed?'OUI':'NON'});if(bagEditing.day!==date)changes.unshift({field:'DATE',old:bagEditing.day,new:date});if(changes.length)updated._history=[...(previous._history||[]),{at:new Date().toLocaleString('fr-FR'),changes}];}
+ if(previous){const changes=fields.map((keys,i)=>({field:names[i+1]||keys[0],old:String(pick(previous,...keys)),new:String(row[keys[0]]??'')})).filter(c=>c.old!==c.new);if(Boolean(previous.closed)!==updated.closed)changes.push({field:'DOSSIER CLÔTURÉ',old:previous.closed?'OUI':'NON',new:updated.closed?'OUI':'NON'});if(bagEditing.day!==date)changes.unshift({field:'DATE',old:bagEditing.day,new:date});if(changes.length)updated._history=[...(previous._history||[]),auditEvent('MODIFICATION',changes)];}else{updated.createdBy=sessionUser;updated.createdAt=new Date().toISOString();updated._history=[auditEvent('CRÉATION')];}
  const records=[...(dataset[date]||[])];
  if(bagEditing&&bagEditing.day===date)records[bagEditing.index]=updated;else records.push(updated);
  $('bagSave').disabled=true;
@@ -427,9 +455,10 @@ function openRemarks(){
 $('remarkAdd').onclick=()=>{$('remarkDate').value=$('view').value==='month'?$('date').value.slice(0,7)+'-01':$('date').value;$('remarkInput').value='';$('remarkAddStatus').textContent='';$('remarkAddDialog').showModal();};
 $('remarkAddClose').onclick=()=>$('remarkAddDialog').close();
 $('remarkSave').onclick=async()=>{
+ if(!requireUser()){$('remarkAddStatus').textContent='Choisis ta session USER.';return;}
  const value=$('remarkInput').value.trim(),day=$('remarkDate').value;if(!value||!day){$('remarkAddStatus').textContent='Date et remarque obligatoires.';return;}
  const key='flux_bags_remarks_'+day.slice(0,7),remarks={...(metadata[key]||{})};
- const formatted=day.split('-').reverse().join('-')+' — REMARQUES :\n'+value;
+ const formatted=day.split('-').reverse().join('-')+' — USER '+sessionUser+' — REMARQUES :\n'+value;
  remarks[day]=[...(remarks[day]||[]),formatted];$('remarkSave').disabled=true;
  try{await save({days:[],metadata:{[key]:remarks}});metadata[key]=remarks;$('remarkAddDialog').close();openRemarks();}
  catch(e){$('remarkAddStatus').textContent=e.message;}finally{$('remarkSave').disabled=false;}
@@ -476,4 +505,4 @@ $('excelDownload').onclick=async()=>{
  catch(e){$('excelStatus').textContent='Erreur export Excel : '+e.message;}
  finally{btn.disabled=false;}
 };
-$('headerRefresh').onclick=load;setInterval(()=>{if(!document.querySelector('dialog[open]')&&!document.hidden)load();},15000);document.addEventListener('visibilitychange',()=>{if(!document.hidden&&!document.querySelector('dialog[open]'))load();});$('date').onchange=()=>{updateMonthDisplay();render();};$('airline').onchange=render;$('search').oninput=render;const today=new Date();const localToday=new Date(today.getTime()-today.getTimezoneOffset()*60000).toISOString().slice(0,10);$('view').value='month';$('date').type='month';$('date').value=localToday.slice(0,7);updateMonthDisplay();load();
+$('headerRefresh').onclick=load;setInterval(()=>{if(!document.querySelector('dialog[open]')&&!document.hidden)load();},15000);document.addEventListener('visibilitychange',()=>{if(!document.hidden&&!document.querySelector('dialog[open]'))load();});$('date').onchange=()=>{updateMonthDisplay();render();};$('airline').onchange=render;$('search').oninput=render;setupUserSession();const today=new Date();const localToday=new Date(today.getTime()-today.getTimezoneOffset()*60000).toISOString().slice(0,10);$('view').value='month';$('date').type='month';$('date').value=localToday.slice(0,7);updateMonthDisplay();load();
