@@ -78,24 +78,7 @@ function matchesBagSearch(r,raw){
 function visibleRows(){const company=$('airline').value,search=$('search').value.trim().toLowerCase();return allRows().filter(({r})=>(!company||String(pick(r,...fields[0])).toUpperCase()===company)&&(!search||matchesBagSearch(r,search))).sort((a,b)=>{const x=sortColumn===0?a.date:sortColumn===5?String(bagCount(a.r)):String(pick(a.r,...fields[sortColumn>5?sortColumn-2:sortColumn-1])),y=sortColumn===0?b.date:sortColumn===5?String(bagCount(b.r)):String(pick(b.r,...fields[sortColumn>5?sortColumn-2:sortColumn-1]));return sortDirection*x.localeCompare(y,'fr',{numeric:true,sensitivity:'base'});});}
 function summary(){
  const dates=selectedDates($('view').value,$('date').value,$('date').value);
- const byCompany=new Map();
- const ensure=code=>{if(!byCompany.has(code))byCompany.set(code,{airline:code,expected:0,toProcess:0,saved:0,loaded:0,notLoaded:0,cancelled:0});return byCompany.get(code);};
- for(const date of dates){
-  for(const r of dataset[date]||[]){
-   const code=String(pick(r,...fields[0])).toUpperCase();if(!code)continue;
-   const v=ensure(code);v.toProcess++;v.expected+=countBags(r);
-   const status=String(normalizeFluxStatus(pick(r,...fields[10]))||'');
-   if(status==='SAUVÉ')v.saved++;
-   else if(status==='CHARGÉ')v.loaded++;
-   else if(status==='NON CHARGÉ')v.notLoaded++;
-   else if(status==='ANNULÉ')v.cancelled++;
-  }
-  for(const r of dailySummaryFor(date)){const code=String(r.airline||'').toUpperCase();if(code)ensure(code);}
- }
- if($('view').value==='month'&&!dates.length){
-  for(const r of metadata['flux_bags_monthly_'+currentMonth()]||[]){const code=String(r.airline||'').toUpperCase();if(code)ensure(code);}
- }
- return [...byCompany.values()].filter(r=>!$('airline').value||r.airline===$('airline').value);
+ return groupedMetrics(dates,$('airline').value);
 }
 const summaryKeys=['expected','toProcess','saved','loaded','notLoaded','cancelled'];
 function syncModalDate(prefix){
@@ -179,14 +162,18 @@ function selectedDates(period,from,to){
   return period==='day'?d===from:period==='month'?d.slice(0,7)===from.slice(0,7):period==='year'?d.slice(0,4)===from.slice(0,4):d>=from&&d<=to;
  }).sort();
 }
+// The monthly/daily KPI 'expected' is the overall baggage volume, not the
+// number of baggage case records (which is represented by 'toProcess').
 function groupedMetrics(dates,company){
- const map=new Map();
+ const map=new Map(),tagCounts=new Map();
+ const ensure=code=>{if(!map.has(code))map.set(code,{airline:code,...Object.fromEntries(summaryKeys.map(k=>[k,0]))});return map.get(code);};
+ const dailyBagVolumes=new Map();
  for(const date of dates){
   for(const r of dataset[date]||[]){
    const code=String(pick(r,...fields[0])).toUpperCase();
    if(!code||(company&&company!==code))continue;
-   if(!map.has(code))map.set(code,{airline:code,...Object.fromEntries(summaryKeys.map(k=>[k,0]))});
-   const m=map.get(code);m.toProcess++;m.expected+=countBags(r);
+   const m=ensure(code);m.toProcess++;
+   tagCounts.set(code,(tagCounts.get(code)||0)+countBags(r));
    const status=normalizeFluxStatus(pick(r,...fields[10]));
    if(status==='SAUVÉ')m.saved++;
    else if(status==='CHARGÉ')m.loaded++;
@@ -196,9 +183,35 @@ function groupedMetrics(dates,company){
   for(const r of dailySummaryFor(date)){
    const code=String(r.airline||'').toUpperCase();
    if(!code||(company&&company!==code))continue;
-   if(!map.has(code))map.set(code,{airline:code,...Object.fromEntries(summaryKeys.map(k=>[k,0]))});
-   /* Expected totals are derived from the recorded TAGs above. */
+   ensure(code);
+   const v=Number(r.expected);
+   if(r.expected!==''&&r.expected!==null&&r.expected!==undefined&&Number.isFinite(v)&&v>=0){
+    const item=dailyBagVolumes.get(code)||{total:0,dates:new Set()};
+    item.total+=v;item.dates.add(date);dailyBagVolumes.set(code,item);
+   }
   }
+ }
+ // Monthly totals are authoritative for full, past calendar months.
+ // Daily metadata covers selected days when a monthly total is not applicable.
+ const months=[...new Set(dates.map(date=>date.slice(0,7)))];
+ const monthOverrides=new Map();
+ for(const month of months){
+  const monthDays=dates.filter(date=>date.startsWith(month+'-'));
+  const fullMonth=monthDays.length===Object.keys(dataset).filter(date=>date.startsWith(month+'-')).length;
+  const monthFinished=month<todayLocalIso().slice(0,7);
+  if(!fullMonth||!monthFinished)continue;
+  for(const row of metadata['flux_bags_monthly_'+month]||[]){
+   const code=String(row.airline||'').toUpperCase();
+   if(!code||(company&&company!==code))continue;
+   const v=Number(row.expected);
+   if(row.expected===''||row.expected===null||row.expected===undefined||!Number.isFinite(v)||v<0)continue;
+   ensure(code);
+   monthOverrides.set(code,(monthOverrides.get(code)||0)+v);
+  }
+ }
+ for(const [code,m] of map){
+  const daily=dailyBagVolumes.get(code);
+  m.expected=monthOverrides.has(code)?monthOverrides.get(code):daily?.total??tagCounts.get(code)??0;
  }
  return [...map.values()].sort((a,b)=>a.airline.localeCompare(b.airline));
 }
