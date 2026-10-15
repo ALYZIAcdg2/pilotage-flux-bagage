@@ -250,7 +250,11 @@ function groupedMetrics(dates,company){
   for(const row of metadata['flux_bags_monthly_'+month]||[]){
    const code=String(row.airline||'').toUpperCase();
    if(!code||!airlineVisible(code)||(company&&company!==code))continue;
-   const v=Number(row.expected);
+   // TEST only: September 2026 workbook records 4,866 LO expected bags,
+   // distinct from its 102 baggage cases. D1 TEST metadata currently uses 102.
+   // This temporary reference correction must not affect any other period.
+   const v=(month==='2026-09'&&code==='LO')?4866:Number(row.expected);
+   if(month==='2026-09'&&code==='LO'){ensure(code);monthOverrides.set(code,(monthOverrides.get(code)||0)+v);continue;}
    if(row.expected===''||row.expected===null||row.expected===undefined||!Number.isFinite(v)||v<0)continue;
    ensure(code);
    monthOverrides.set(code,(monthOverrides.get(code)||0)+v);
