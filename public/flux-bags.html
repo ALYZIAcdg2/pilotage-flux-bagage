@@ -192,9 +192,9 @@ header nav .last-refresh{flex:0 1 auto;min-width:0;white-space:nowrap;overflow:h
 .bag-closed-field{display:flex!important;align-items:center;gap:10px;grid-column:1/-1;font-weight:700;padding:10px 12px;border:1px solid #d4dbe5;border-radius:10px}
 .bag-closed-field input{width:20px!important;height:20px!important;flex:none}
 
-/* Status indicator palette: green only when dossier closed. */
+/* Status indicator palette depends on operational status, not dossier closure. */
 .bagtable .status-dot.status-closed{background:#16a34a!important;box-shadow:0 0 0 2px #dcfce7!important}
-.bagtable .status-dot.status-saved{background:#f59e0b!important}
+.bagtable .status-dot.status-saved{background:#16a34a!important}
 .bagtable .status-dot.status-loaded{background:#2563eb!important}
 .bagtable .status-dot.status-unloaded{background:#dc2626!important}
 .bagtable .status-dot.status-cancelled{background:#9333ea!important}
