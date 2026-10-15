@@ -209,6 +209,14 @@ header nav .last-refresh{flex:0 1 auto;min-width:0;white-space:nowrap;overflow:h
  #dateLabel{min-width:0!important}
  #date{min-width:0!important;width:100%!important;max-width:100%!important}
 }
+
+/* Mobile filters: a true two-column grid with equal-size controls. */
+@media(max-width:850px){
+ main>.panel.tools{display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:10px 12px!important;align-items:stretch!important}
+ main>.panel.tools>label{display:grid!important;grid-template-columns:minmax(0,1fr)!important;min-width:0!important;max-width:none!important;width:100%!important;flex:none!important;align-content:start!important}
+ main>.panel.tools>label>input,main>.panel.tools>label>select{display:block!important;width:100%!important;min-width:0!important;max-width:100%!important;box-sizing:border-box!important;height:44px!important}
+ main>.panel.tools>button{width:100%!important;min-width:0!important;max-width:100%!important;box-sizing:border-box!important}
+}
 </style></head><body><header><div><h1>PILOTAGE FLUX BAGAGE</h1><small>Compte rendu pilotage · environnement de TEST</small></div><nav><span id="lastRefresh" class="last-refresh" aria-live="polite">Dernière actualisation : —</span><button id="headerRefresh" class="secondary" type="button">↻ Actualiser</button><details class="tools-menu"><summary>⚙ Outils</summary><div><a href="/flux-bags-import.html" class="tools-import">📥 IMPORTER</a><button type="button" id="export" class="secondary">📊 EXPORT EXCEL</button></div></details></nav></header><main>
 <div class="panel tools"><label>PÉRIODE<select id="view"><option value="day">Jour</option><option value="month">Mois</option><option value="year">Année</option></select></label><label id="dateLabel">Date<input type="date" id="date"></label><label>Compagnie<select id="airline"><option value="">Toutes les compagnies</option></select></label><label>Rechercher<input type="search" id="search" placeholder="Vol, tag, localisation…"></label><button id="newBagButton" class="new-bag-green">+ Nouveau dossier</button><button id="summaryButton" class="secondary">RÉCAPITULATIF</button><button id="remarkButton">Remarques</button><button id="chartsButton" class="secondary" aria-label="Graphiques" title="Graphiques">▥</button></div>
 <div id="message"></div><div id="kpis" class="kpis"></div>
