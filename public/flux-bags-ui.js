@@ -438,7 +438,15 @@ $('remarkButton').onclick=openRemarks;$('remarkClose').onclick=()=>$('remarkDial
 $('rows').onclick=e=>{const tr=e.target.closest('tr[data-index]');if(tr)openBag(tr.dataset.date,Number(tr.dataset.index));};
 $('rows').onkeydown=e=>{if(e.key==='Enter'||e.key===' '){const tr=e.target.closest('tr[data-index]');if(tr){e.preventDefault();openBag(tr.dataset.date,Number(tr.dataset.index));}}};
 document.querySelectorAll('.bagtable th').forEach((th,i)=>{if(i===0)return;const column=i-1;th.tabIndex=0;th.setAttribute('role','button');th.onclick=()=>{if(sortColumn===column)sortDirection*=-1;else{sortColumn=column;sortDirection=1;}render();};th.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();th.click();}};});
-function syncDateControl(){const input=$('date'),month=$('view').value==='month',year=$('view').value==='year',value=input.value;input.type=year?'number':month?'month':'date';if(year){input.min='2000';input.max='2100';input.step='1';}input.value=year?value.slice(0,4):month?value.slice(0,7):(value.length===4?value+'-01-01':value.length===7?value+'-01':value);$('dateLabel').firstChild.textContent=year?'Année':month?'Mois':'Date';}
+function updateMonthDisplay(){
+ const month=$('view').value==='month',shell=$('dateInputShell'),display=$('monthDisplay'),value=$('date').value;
+ shell.classList.toggle('month-mode',month);
+ if(month&&/^\d{4}-\d{2}$/.test(value)){
+  const [year,number]=value.split('-').map(Number);
+  display.textContent=new Intl.DateTimeFormat('fr-FR',{month:'long',year:'numeric'}).format(new Date(year,number-1,1));
+ }else display.textContent='';
+}
+function syncDateControl(){const input=$('date'),month=$('view').value==='month',year=$('view').value==='year',value=input.value;input.type=year?'number':month?'month':'date';if(year){input.min='2000';input.max='2100';input.step='1';}input.value=year?value.slice(0,4):month?value.slice(0,7):(value.length===4?value+'-01-01':value.length===7?value+'-01':value);$('dateLabel').firstChild.textContent=year?'Année':month?'Mois':'Date';updateMonthDisplay();}
 $('view').onchange=()=>{syncDateControl();render();};
 function openExcelExport(){
  const monthly=$('view').value==='month',value=$('date').value;
@@ -468,4 +476,4 @@ $('excelDownload').onclick=async()=>{
  catch(e){$('excelStatus').textContent='Erreur export Excel : '+e.message;}
  finally{btn.disabled=false;}
 };
-$('headerRefresh').onclick=load;setInterval(()=>{if(!document.querySelector('dialog[open]')&&!document.hidden)load();},15000);document.addEventListener('visibilitychange',()=>{if(!document.hidden&&!document.querySelector('dialog[open]'))load();});for(const id of ['date','airline'])$(id).onchange=render;$('search').oninput=render;const today=new Date();const localToday=new Date(today.getTime()-today.getTimezoneOffset()*60000).toISOString().slice(0,10);$('view').value='month';$('date').type='month';$('date').value=localToday.slice(0,7);load();
+$('headerRefresh').onclick=load;setInterval(()=>{if(!document.querySelector('dialog[open]')&&!document.hidden)load();},15000);document.addEventListener('visibilitychange',()=>{if(!document.hidden&&!document.querySelector('dialog[open]'))load();});$('date').onchange=()=>{updateMonthDisplay();render();};$('airline').onchange=render;$('search').oninput=render;const today=new Date();const localToday=new Date(today.getTime()-today.getTimezoneOffset()*60000).toISOString().slice(0,10);$('view').value='month';$('date').type='month';$('date').value=localToday.slice(0,7);load();
