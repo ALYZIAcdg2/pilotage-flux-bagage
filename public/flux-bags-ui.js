@@ -95,7 +95,7 @@ const expectedRemovedCodes=()=>new Set(Array.isArray(metadata.flux_bags_removed_
 function visibilityCodes(){
  const month=$('date').value.slice(0,7);
  return [...new Set([
- ...Object.entries(metadata).filter(([key])=>key.startsWith('flux_bags_expected_')).flatMap(([,vals])=>Object.keys(vals||{})),
+ ...Object.entries(metadata).filter(([key])=>key.startsWith('flux_bags_expected_')&&key!=='flux_bags_removed_expected_airlines').flatMap(([,vals])=>vals&&!Array.isArray(vals)?Object.keys(vals):[]),
  ...(Array.isArray(metadata.flux_bags_extra_airlines)?metadata.flux_bags_extra_airlines:[]),
  ...Object.values(dataset).flatMap(rows=>(Array.isArray(rows)?rows:[]).map(r=>String(pick(r,...fields[0])).trim().toUpperCase())),
  ...Object.keys(dataset).flatMap(date=>dailySummaryFor(date).map(r=>String(r.airline||'').trim().toUpperCase())),
@@ -249,7 +249,7 @@ function groupedMetrics(dates,company){
   if(!hasDaily&&days.length&&$('view').value!=='day'){
    // Legacy monthly figures remain readable until daily figures replace them.
    for(const [code,value] of Object.entries(metadata['flux_bags_expected_'+month]||{})){
-    if(airlineVisible(code)&&(!company||company===code)&&Number.isSafeInteger(value)&&value>=0)ensure(code).expected+=value;
+    if(!expectedRemovedCodes().has(code)&&airlineVisible(code)&&(!company||company===code)&&Number.isSafeInteger(value)&&value>=0)ensure(code).expected+=value;
    }
   }else{
    for(const date of days)for(const [code,value] of Object.entries(metadata['flux_bags_expected_daily_'+date]||{})){
@@ -508,7 +508,7 @@ function openExpectedBagsEditor(){
  const month=expectedDialogMonth,codes=[...new Set([...visibilityCodes(),...Object.keys(metadata['flux_bags_expected_daily_'+expectedDialogDate]||{}),...Object.keys(metadata['flux_bags_expected_'+month]||{}),...(month==='2026-09'?Object.keys(SEPT_2026_EXPECTED_EXCEL):[])])].filter(code=>!expectedRemovedCodes().has(code)).sort();
  $('expectedBagsPeriod').textContent='Date : '+displayDate(expectedDialogDate)+' · '+codes.length+' compagnies';
  $('expectedBagsMessage').textContent='';
- $('expectedBagsPrefill').hidden=month!=='2026-09';
+ $('expectedBagsPrefill').hidden=true;
  $('expectedBagsRows').innerHTML=codes.map(code=>expectedCompanyRow(code,(metadata['flux_bags_expected_daily_'+expectedDialogDate]||{})[code]??null)).join('');
  updateExpectedDialogTotal();
  if(!$('expectedBagsDialog').open)$('expectedBagsDialog').showModal();
