@@ -640,4 +640,24 @@ $('excelDownload').onclick=async()=>{
  catch(e){$('excelStatus').textContent='Erreur export Excel : '+e.message;}
  finally{btn.disabled=false;}
 };
-$('headerRefresh').onclick=load;setInterval(()=>{if(!document.querySelector('dialog[open]')&&!document.hidden)load();},15000);document.addEventListener('visibilitychange',()=>{if(!document.hidden&&!document.querySelector('dialog[open]'))load();});$('date').onchange=()=>{updateMonthDisplay();render();};$('airline').onchange=render;$('search').oninput=render;setupUserSession();setupAirlineVisibility();const today=new Date();const localToday=new Date(today.getTime()-today.getTimezoneOffset()*60000).toISOString().slice(0,10);$('view').value='month';$('date').type='month';$('date').value=localToday.slice(0,7);updateMonthDisplay();load();
+$('headerRefresh').onclick=load;setInterval(()=>{if(!document.querySelector('dialog[open]')&&!document.hidden)load();},15000);document.addEventListener('visibilitychange',()=>{if(!document.hidden&&!document.querySelector('dialog[open]'))load();});function shiftDatePeriod(delta){
+ const mode=$('view').value,input=$('date'),raw=input.value;
+ if(mode==='year'){
+  const year=Number(raw);if(!Number.isInteger(year)||year+delta<2000||year+delta>2100)return;
+  input.value=String(year+delta);
+ }else if(mode==='month'){
+  if(!/^\d{4}-\d{2}$/.test(raw))return;
+  const [year,month]=raw.split('-').map(Number);
+  const next=new Date(Date.UTC(year,month-1+delta,1));
+  input.value=next.getUTCFullYear()+'-'+String(next.getUTCMonth()+1).padStart(2,'0');
+ }else{
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(raw))return;
+  const [year,month,day]=raw.split('-').map(Number);
+  const next=new Date(Date.UTC(year,month-1,day+delta));
+  input.value=next.getUTCFullYear()+'-'+String(next.getUTCMonth()+1).padStart(2,'0')+'-'+String(next.getUTCDate()).padStart(2,'0');
+ }
+ updateMonthDisplay();render();
+}
+$('datePrevious').onclick=()=>shiftDatePeriod(-1);
+$('dateNext').onclick=()=>shiftDatePeriod(1);
+$('date').onchange=()=>{updateMonthDisplay();render();};$('airline').onchange=render;$('search').oninput=render;setupUserSession();setupAirlineVisibility();const today=new Date();const localToday=new Date(today.getTime()-today.getTimezoneOffset()*60000).toISOString().slice(0,10);$('view').value='month';$('date').type='month';$('date').value=localToday.slice(0,7);updateMonthDisplay();load();
