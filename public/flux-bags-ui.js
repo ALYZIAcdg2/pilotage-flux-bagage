@@ -747,6 +747,22 @@ $('headerRefresh').onclick=load;setInterval(()=>{if(!document.querySelector('dia
  }
  updateMonthDisplay();render();
 }
+/* Mirror the table's horizontal scrollbar above the rows so scrolling does not require reaching the last dossier. */
+(function setupBaggageHorizontalScrollbar(){
+ const upper=$('bagScrollTop'),inner=$('bagScrollTopInner'),lower=document.querySelector('.bagtable'),table=lower?.querySelector('table');
+ if(!upper||!inner||!lower||!table)return;
+ let syncing=false;
+ const update=()=>{
+  inner.style.width=Math.max(table.scrollWidth,lower.scrollWidth)+'px';
+  upper.hidden=table.scrollWidth<=lower.clientWidth+2;
+  if(!syncing)upper.scrollLeft=lower.scrollLeft;
+ };
+ upper.addEventListener('scroll',()=>{if(syncing)return;syncing=true;lower.scrollLeft=upper.scrollLeft;syncing=false;});
+ lower.addEventListener('scroll',()=>{if(syncing)return;syncing=true;upper.scrollLeft=lower.scrollLeft;syncing=false;},{passive:true});
+ if(typeof ResizeObserver!=='undefined'){const observer=new ResizeObserver(update);observer.observe(lower);observer.observe(table);}
+ window.addEventListener('resize',update);
+ requestAnimationFrame(update);
+})();
 $('datePrevious').onclick=()=>shiftDatePeriod(-1);
 $('dateNext').onclick=()=>shiftDatePeriod(1);
 $('date').onchange=()=>{updateMonthDisplay();render();};$('airline').onchange=render;$('search').oninput=render;setupUserSession();setupAirlineVisibility();const today=new Date();const localToday=new Date(today.getTime()-today.getTimezoneOffset()*60000).toISOString().slice(0,10);$('view').value='month';$('date').type='month';$('date').value=localToday.slice(0,7);updateMonthDisplay();load();
