@@ -40,7 +40,19 @@ function metric(ws,row,c1,c2,label,value,color=navy){
 }
 function dataHeader(ws,row,labels){const rr=ws.getRow(row);rr.values=labels;rr.height=34;rr.eachCell(c=>{c.fill=fill(navy2);c.font=font(white,10,true);c.alignment={vertical:'middle',horizontal:'center',wrapText:true};});}
 function styleData(ws,first,last,cols,statusColumn){
- for(let i=first;i<=last;i++){const r=ws.getRow(i);r.height=27;for(let j=1;j<=cols;j++){const c=r.getCell(j);c.font=font(navy,10);c.alignment={vertical:'middle',wrapText:true};if(i%2===0)c.fill=fill(light);}
+ for(let i=first;i<=last;i++){const r=ws.getRow(i);
+  // ExcelJS wrapText alone does not auto-fit row height in generated workbooks.
+  // Estimate lines from each column's configured width and explicit line breaks.
+  let lines=1;
+  for(let j=1;j<=cols;j++){
+   const value=String(r.getCell(j).value??'');
+   const width=Math.max(6,Number(ws.getColumn(j).width)||16);
+   const usable=Math.max(5,Math.floor(width*0.91));
+   const count=value.split(/\r?\n/).reduce((n,part)=>n+Math.max(1,Math.ceil(part.length/usable)),0);
+   lines=Math.max(lines,count);
+  }
+  r.height=Math.max(27,Math.min(360,lines*15+9));
+  for(let j=1;j<=cols;j++){const c=r.getCell(j);c.font=font(navy,10);c.alignment={vertical:'middle',wrapText:true};if(i%2===0)c.fill=fill(light);}
  if(statusColumn){const c=r.getCell(statusColumn),v=status({fluxStatus:c.value});if(v==='CHARGE'){c.fill=fill('DCFCE7');c.font=font('166534',10,true);}else if(v==='NON CHARGE'){c.fill=fill('FFEDD5');c.font=font('9A3412',10,true);}else if(v==='SAUVE'){c.fill=fill('DBEAFE');c.font=font('1D4ED8',10,true);}}
  }
 }
