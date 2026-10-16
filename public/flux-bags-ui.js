@@ -477,7 +477,7 @@ let expectedDialogMonth='';
 let expectedPendingCompanies=new Set();
 let expectedPendingRemoved=new Set();
 function expectedCompanyRow(code,value){
- return '<div class="expected-bags-row"><div class="expected-bags-company"><img src="https://images.kiwi.com/airlines/64/'+encodeURIComponent(code)+'.png" loading="lazy" alt="" onerror="this.hidden=true"><span class="expected-bags-name"><strong>'+esc(code)+'</strong><small>'+esc(companyNames[code]||'Compagnie')+(airlineVisible(code)?'':' · Masquée')+'</small></span></div><input type="number" min="0" step="1" inputmode="numeric" aria-label="Bagages attendus '+esc(code)+'" data-expected-company="'+esc(code)+'" value="'+(value===null?'':value)+'" placeholder="—"><button type="button" class="expected-bags-delete" data-delete-expected="'+esc(code)+'" aria-label="Supprimer définitivement '+esc(code)+'" title="Supprimer définitivement '+esc(code)+'">✕</button></div>';
+ return '<div class="expected-bags-row"><div class="expected-bags-company"><img src="https://images.kiwi.com/airlines/64/'+encodeURIComponent(code)+'.png" loading="lazy" alt="" onerror="this.hidden=true"><span class="expected-bags-name"><strong>'+esc(code)+'</strong><small>'+esc(companyNames[code]||'Compagnie')+(airlineVisible(code)?'':' · Masquée')+'</small></span></div><input type="number" min="0" step="1" inputmode="numeric" aria-label="Bagages attendus '+esc(code)+'" data-expected-company="'+esc(code)+'" value="'+(value===null?'':value)+'" placeholder="—"><button type="button" class="expected-bags-delete" data-delete-expected="'+esc(code)+'" aria-label="Supprimer définitivement '+esc(code)+'" title="Supprimer définitivement '+esc(code)+'"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2m3 0-1 14H6L5 6m5 4v7m4-7v7"/></svg></button></div>';
 }
 
 function updateExpectedDialogTotal(){
@@ -489,6 +489,7 @@ function updateExpectedDialogTotal(){
   const value=input.value.trim()===''?null:Number(input.value);
   if(airlineVisible(code)&&value!==null&&Number.isSafeInteger(value)&&value>=0)sum+=value;
  }
+ $('expectedBagsCompanyCount').textContent=inputs.length.toLocaleString('fr-FR');
  $('expectedBagsTotal').textContent=sum.toLocaleString('fr-FR');
 }
 function openExpectedBagsEditor(){
