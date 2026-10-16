@@ -213,7 +213,7 @@ function todayLocalIso(){const d=new Date();return [d.getFullYear(),String(d.get
 function lastDayOfMonth(year,month){return new Date(Date.UTC(year,month,0)).getUTCDate();}
 function selectedDates(period,from,to){
  const today=todayLocalIso(),current=period==='month'&&from.slice(0,7)===today.slice(0,7)||period==='year'&&from.slice(0,4)===today.slice(0,4);
- return Object.keys(dataset).filter(d=>{
+ return [...new Set([...Object.keys(dataset),...Object.keys(metadata).filter(k=>/^flux_bags_expected_daily_\d{4}-\d{2}-\d{2}$/.test(k)).map(k=>k.slice('flux_bags_expected_daily_'.length))])].filter(d=>{
   if(current&&d>today)return false;
   return period==='day'?d===from:period==='month'?d.slice(0,7)===from.slice(0,7):period==='year'?d.slice(0,4)===from.slice(0,4):d>=from&&d<=to;
  }).sort();
@@ -241,14 +241,20 @@ function groupedMetrics(dates,company){
    else if(status==='ANNULÉ')m.cancelled+=bags;
   }
  }
- // A monthly entry is counted once per month and airline, not once per dossier.
- const months=[...new Set(dates.map(date=>date.slice(0,7)))];
- for(const month of months){
-  const entries=metadata['flux_bags_expected_'+month]||{};
-  for(const [code,expected] of Object.entries(entries)){
-   if(!airlineVisible(code)||(company&&company!==code))continue;
-   if(!Number.isSafeInteger(expected)||expected<0)continue;
-   ensure(code).expected+=expected;
+ // Daily expected figures are independent operational entries, never derived from TAGs.
+ const datesByMonth=new Map();
+ for(const date of dates){const month=date.slice(0,7);if(!datesByMonth.has(month))datesByMonth.set(month,[]);datesByMonth.get(month).push(date);}
+ for(const [month,days] of datesByMonth){
+  const hasDaily=Object.keys(metadata).some(key=>key.startsWith('flux_bags_expected_daily_'+month+'-'));
+  if(!hasDaily&&days.length&&$('view').value!=='day'){
+   // Legacy monthly figures remain readable until daily figures replace them.
+   for(const [code,value] of Object.entries(metadata['flux_bags_expected_'+month]||{})){
+    if(airlineVisible(code)&&(!company||company===code)&&Number.isSafeInteger(value)&&value>=0)ensure(code).expected+=value;
+   }
+  }else{
+   for(const date of days)for(const [code,value] of Object.entries(metadata['flux_bags_expected_daily_'+date]||{})){
+    if(airlineVisible(code)&&(!company||company===code)&&Number.isSafeInteger(value)&&value>=0)ensure(code).expected+=value;
+   }
   }
  }
  return [...map.values()].sort((a,b)=>a.airline.localeCompare(b.airline));
@@ -474,6 +480,7 @@ function kpiCompanyStats(key){
 
 const SEPT_2026_EXPECTED_EXCEL={SK:4758,AI:9011,EI:17510,LA:7669,HF:13252,SB:3602,DE:5215,MH:6770,RJ:4421,AV:5214,FI:9141,AT:10427,JU:4332,LO:4866};
 let expectedDialogMonth='';
+let expectedDialogDate='';
 let expectedPendingCompanies=new Set();
 let expectedPendingRemoved=new Set();
 function expectedCompanyRow(code,value){
@@ -494,18 +501,20 @@ function updateExpectedDialogTotal(){
 }
 function openExpectedBagsEditor(){
  expectedDialogMonth=currentMonth();
+ expectedDialogDate=$('view').value==='day'?$('date').value:todayLocalIso();
+ $('expectedBagsDate').value=expectedDialogDate;
  expectedPendingCompanies=new Set();
  expectedPendingRemoved=new Set();
- const month=expectedDialogMonth,codes=[...new Set([...visibilityCodes(),...Object.keys(metadata['flux_bags_expected_'+month]||{}),...(month==='2026-09'?Object.keys(SEPT_2026_EXPECTED_EXCEL):[])])].filter(code=>!expectedRemovedCodes().has(code)).sort();
- $('expectedBagsPeriod').textContent='Mois : '+month+' · '+codes.length+' compagnies';
+ const month=expectedDialogMonth,codes=[...new Set([...visibilityCodes(),...Object.keys(metadata['flux_bags_expected_daily_'+expectedDialogDate]||{}),...Object.keys(metadata['flux_bags_expected_'+month]||{}),...(month==='2026-09'?Object.keys(SEPT_2026_EXPECTED_EXCEL):[])])].filter(code=>!expectedRemovedCodes().has(code)).sort();
+ $('expectedBagsPeriod').textContent='Date : '+displayDate(expectedDialogDate)+' · '+codes.length+' compagnies';
  $('expectedBagsMessage').textContent='';
  $('expectedBagsPrefill').hidden=month!=='2026-09';
- $('expectedBagsRows').innerHTML=codes.map(code=>expectedCompanyRow(code,monthlyExpected(month,code))).join('');
+ $('expectedBagsRows').innerHTML=codes.map(code=>expectedCompanyRow(code,(metadata['flux_bags_expected_daily_'+expectedDialogDate]||{})[code]??null)).join('');
  updateExpectedDialogTotal();
  if(!$('expectedBagsDialog').open)$('expectedBagsDialog').showModal();
 }
 async function saveExpectedBagsEditor(closeAfter){
- const month=expectedDialogMonth,key='flux_bags_expected_'+month,next={...(metadata[key]||{})};
+ const key='flux_bags_expected_daily_'+expectedDialogDate,next={...(metadata[key]||{})};
  for(const input of $('expectedBagsRows').querySelectorAll('input[data-expected-company]')){
   const code=input.dataset.expectedCompany,raw=input.value.trim();
   if(!raw){delete next[code];continue;}
@@ -545,7 +554,7 @@ $('expectedBagsAdd').onclick=()=>{
  const rowsValues=new Map(existing.map(input=>[input.dataset.expectedCompany,input.value]));
  rowsValues.set(code,'');
  rows.innerHTML=[...rowsValues.keys()].sort().map(key=>expectedCompanyRow(key,rowsValues.get(key)===''?null:Number(rowsValues.get(key)))).join('');
- $('expectedBagsPeriod').textContent='Mois : '+expectedDialogMonth+' · '+rowsValues.size+' compagnies';
+ $('expectedBagsPeriod').textContent='Date : '+displayDate(expectedDialogDate)+' · '+rowsValues.size+' compagnies';
  $('expectedBagsNewCode').value='';
  $('expectedBagsMessage').textContent=code+' ajouté. Enregistrer pour conserver la compagnie.';
  updateExpectedDialogTotal();
@@ -557,8 +566,20 @@ $('expectedBagsRows').onclick=e=>{
  if(!confirm('Supprimer définitivement '+code+' de la liste des BAGAGES ATTENDUS ? Les dossiers historiques ne seront pas supprimés.'))return;
  expectedPendingRemoved.add(code);expectedPendingCompanies.delete(code);
  btn.closest('.expected-bags-row').remove();
- $('expectedBagsPeriod').textContent='Mois : '+expectedDialogMonth+' · '+$('expectedBagsRows').querySelectorAll('[data-expected-company]').length+' compagnies';
+ $('expectedBagsPeriod').textContent='Date : '+displayDate(expectedDialogDate)+' · '+$('expectedBagsRows').querySelectorAll('[data-expected-company]').length+' compagnies';
  $('expectedBagsMessage').textContent=code+' retirée. Clique sur Enregistrer pour confirmer définitivement.';
+ updateExpectedDialogTotal();
+};
+$('expectedBagsDate').onchange=()=>{
+ if(!/^\d{4}-\d{2}-\d{2}$/.test($('expectedBagsDate').value))return;
+ expectedDialogDate=$('expectedBagsDate').value;
+ expectedDialogMonth=expectedDialogDate.slice(0,7);
+ expectedPendingCompanies=new Set();expectedPendingRemoved=new Set();
+ const codes=[...new Set([...visibilityCodes(),...Object.keys(metadata['flux_bags_expected_daily_'+expectedDialogDate]||{})])].filter(code=>!expectedRemovedCodes().has(code)).sort();
+ $('expectedBagsRows').innerHTML=codes.map(code=>expectedCompanyRow(code,(metadata['flux_bags_expected_daily_'+expectedDialogDate]||{})[code]??null)).join('');
+ $('expectedBagsPeriod').textContent='Date : '+displayDate(expectedDialogDate)+' · '+codes.length+' compagnies';
+ $('expectedBagsPrefill').hidden=true;
+ $('expectedBagsMessage').textContent='';
  updateExpectedDialogTotal();
 };
 $('expectedBagsClose').onclick=()=>$('expectedBagsDialog').close();
