@@ -95,6 +95,7 @@ function visibilityCodes(){
  const month=$('date').value.slice(0,7);
  return [...new Set([
  ...Object.entries(metadata).filter(([key])=>key.startsWith('flux_bags_expected_')).flatMap(([,vals])=>Object.keys(vals||{})),
+ ...(Array.isArray(metadata.flux_bags_extra_airlines)?metadata.flux_bags_extra_airlines:[]),
  ...Object.values(dataset).flatMap(rows=>(Array.isArray(rows)?rows:[]).map(r=>String(pick(r,...fields[0])).trim().toUpperCase())),
  ...Object.keys(dataset).flatMap(date=>dailySummaryFor(date).map(r=>String(r.airline||'').trim().toUpperCase())),
  ...Object.entries(metadata).filter(([key])=>key.startsWith('flux_bags_monthly_')).flatMap(([,rows])=>(Array.isArray(rows)?rows:[]).map(r=>String(r.airline||'').trim().toUpperCase())),
@@ -472,6 +473,11 @@ function kpiCompanyStats(key){
 
 const SEPT_2026_EXPECTED_EXCEL={SK:4758,AI:9011,EI:17510,LA:7669,HF:13252,SB:3602,DE:5215,MH:6770,RJ:4421,AV:5214,FI:9141,AT:10427,JU:4332,LO:4866};
 let expectedDialogMonth='';
+let expectedPendingCompanies=new Set();
+function expectedCompanyRow(code,value){
+ return '<div class="expected-bags-row"><div class="expected-bags-company"><img src="https://images.kiwi.com/airlines/64/'+encodeURIComponent(code)+'.png" loading="lazy" alt="" onerror="this.hidden=true"><span class="expected-bags-name"><strong>'+esc(code)+'</strong><small>'+esc(companyNames[code]||'Compagnie')+(airlineVisible(code)?'':' · Masquée')+'</small></span></div><input type="number" min="0" step="1" inputmode="numeric" aria-label="Bagages attendus '+esc(code)+'" data-expected-company="'+esc(code)+'" value="'+(value===null?'':value)+'" placeholder="—"></div>';
+}
+
 function updateExpectedDialogTotal(){
  const inputs=[...$('expectedBagsRows').querySelectorAll('input[data-expected-company]')];
  let sum=0;
@@ -485,14 +491,12 @@ function updateExpectedDialogTotal(){
 }
 function openExpectedBagsEditor(){
  expectedDialogMonth=currentMonth();
+ expectedPendingCompanies=new Set();
  const month=expectedDialogMonth,codes=[...new Set([...visibilityCodes(),...Object.keys(metadata['flux_bags_expected_'+month]||{}),...(month==='2026-09'?Object.keys(SEPT_2026_EXPECTED_EXCEL):[])])].sort();
  $('expectedBagsPeriod').textContent='Mois : '+month+' · '+codes.length+' compagnies';
  $('expectedBagsMessage').textContent='';
  $('expectedBagsPrefill').hidden=month!=='2026-09';
- $('expectedBagsRows').innerHTML=codes.map(code=>{
-  const value=monthlyExpected(month,code);
-  return '<div class="expected-bags-row"><div class="expected-bags-company"><img src="https://images.kiwi.com/airlines/64/'+encodeURIComponent(code)+'.png" loading="lazy" alt="" onerror="this.hidden=true"><span class="expected-bags-name"><strong>'+esc(code)+'</strong><small>'+esc(companyNames[code]||'Compagnie')+(airlineVisible(code)?'':' · Masquée')+'</small></span></div><input type="number" min="0" step="1" inputmode="numeric" aria-label="Bagages attendus '+esc(code)+'" data-expected-company="'+esc(code)+'" value="'+(value===null?'':value)+'" placeholder="—"></div>';
- }).join('');
+ $('expectedBagsRows').innerHTML=codes.map(code=>expectedCompanyRow(code,monthlyExpected(month,code))).join('');
  updateExpectedDialogTotal();
  if(!$('expectedBagsDialog').open)$('expectedBagsDialog').showModal();
 }
@@ -505,11 +509,14 @@ async function saveExpectedBagsEditor(closeAfter){
   if(!Number.isSafeInteger(n)||n<0){$('expectedBagsMessage').textContent='Nombre invalide pour '+code+'.';input.focus();return;}
   next[code]=n;
  }
+ const extra=[...new Set([...(Array.isArray(metadata.flux_bags_extra_airlines)?metadata.flux_bags_extra_airlines:[]),...expectedPendingCompanies])].sort();
  const a=$('expectedBagsSave'),b=$('expectedBagsSaveClose');a.disabled=true;b.disabled=true;
  $('expectedBagsMessage').textContent='Enregistrement en cours…';
  try{
-  await save({days:[],metadata:{[key]:next}});
+  await save({days:[],metadata:{[key]:next,flux_bags_extra_airlines:extra}});
   metadata[key]=next;
+  metadata.flux_bags_extra_airlines=extra;
+  expectedPendingCompanies.clear();
   render();
   if($('summaryDialog').open)renderSummary();
   if($('chartsDialog').open)renderCharts();
@@ -518,6 +525,23 @@ async function saveExpectedBagsEditor(closeAfter){
  }catch(err){$('expectedBagsMessage').textContent='Erreur : '+err.message;}
  finally{a.disabled=false;b.disabled=false;}
 }
+$('expectedBagsAdd').onclick=()=>{
+ const code=String($('expectedBagsNewCode').value||'').trim().toUpperCase();
+ if(!/^[A-Z0-9]{2,3}$/.test(code)){$('expectedBagsMessage').textContent='Saisir un code compagnie valide (2 ou 3 caractères).';return;}
+ const rows=$('expectedBagsRows');
+ const existing=[...rows.querySelectorAll('input[data-expected-company]')];
+ const found=existing.find(i=>i.dataset.expectedCompany===code);
+ if(found){found.focus();$('expectedBagsMessage').textContent=code+' figure déjà dans la liste.';return;}
+ expectedPendingCompanies.add(code);
+ const rowsValues=new Map(existing.map(input=>[input.dataset.expectedCompany,input.value]));
+ rowsValues.set(code,'');
+ rows.innerHTML=[...rowsValues.keys()].sort().map(key=>expectedCompanyRow(key,rowsValues.get(key)===''?null:Number(rowsValues.get(key)))).join('');
+ $('expectedBagsPeriod').textContent='Mois : '+expectedDialogMonth+' · '+rowsValues.size+' compagnies';
+ $('expectedBagsNewCode').value='';
+ $('expectedBagsMessage').textContent=code+' ajouté. Enregistrer pour conserver la compagnie.';
+ updateExpectedDialogTotal();
+ rows.querySelector('[data-expected-company="'+code+'"]').focus();
+};
 $('expectedBagsClose').onclick=()=>$('expectedBagsDialog').close();
 $('expectedBagsRows').oninput=updateExpectedDialogTotal;
 $('expectedBagsPrefill').onclick=()=>{
