@@ -333,7 +333,7 @@ function makeBagField(i,r){
  if(i===0){const choices=[...new Set([...companyCodes(),...Object.values(dataset).flatMap(rows=>(Array.isArray(rows)?rows:[]).map(x=>upper(pick(x,...fields[0])))),upper(value)].filter(Boolean))].sort();return '<label>'+label+'<select '+common+' required><option value="">Choisir CIE</option>'+choices.map(c=>'<option value="'+esc(c)+'" '+(upper(value)===c?'selected':'')+'>'+esc(c)+'</option>').join('')+'</select></label>';}
  if(i===3)return '<div class="bag-tag-field"><label>'+label+'</label><div id="bagTagRows"></div><button type="button" id="bagTagAdd" class="secondary bag-tag-add" aria-label="Ajouter un TAG">+ Ajouter un TAG</button></div>';
  if(i===2||i===5)return '<label>'+label+'<input '+common+' type="text" inputmode="numeric" placeholder="HH:MM" value="'+esc(normalizedClock(value))+'" maxlength="5"></label>';
- if(i===4)return '<label class="bag-inbound-field">'+label+'<span class="bag-inbound-controls"><input '+common+' value="'+esc(upper(value))+'" placeholder="N° VOL / LOCAL / RUSH" autocomplete="off"><select id="bagInboundPicker" aria-label="Type de vol d’apport"><option value="">CHOISIR</option><option value="LOCAL">LOCAL</option><option value="RUSH">RUSH</option><option value="FREE">SAISIE LIBRE</option></select></span></label>';
+ if(i===4)return '<label class="bag-inbound-field">'+label+'<span class="bag-inbound-controls"><input '+common+' value="'+esc(upper(value))+'" placeholder="N° VOL / LOCAL / RUSH" autocomplete="off"><select id="bagInboundPicker" aria-label="Type de vol d’apport"><option value="">CHOIX</option><option value="LOCAL">LOCAL</option><option value="RUSH">RUSH</option><option value="FREE">SAISIE LIBRE</option></select></span></label>';
  if(i===7)return '<label>'+label+'<input '+common+' list="bagRemarksList" value="'+esc(upper(value))+'" placeholder="Choisir ou saisir une remarque" autocomplete="off"><datalist id="bagRemarksList">'+[...new Set([...remarkChoices,upper(value)].filter(Boolean))].map(x=>'<option value="'+esc(x)+'"></option>').join('')+'</datalist></label>';
  if(i===10)return '<label>'+label+'<select '+common+'>'+['','SAUVÉ','CHARGÉ','NON CHARGÉ','ANNULÉ'].map(x=>'<option value="'+esc(x)+'" '+(upper(value).replace(/E$/,'É')===x?'selected':'')+'>'+esc(x||'Choisir statut')+'</option>').join('')+'</select></label>';
  if(i===11)return '<label>'+label+'<select '+common+' style="text-transform:none">'+['',...new Set([value,...faultStations].filter(Boolean))].map(x=>'<option value="'+esc(x)+'" '+(x===value?'selected':'')+'>'+esc(x||'Choisir station')+'</option>').join('')+'</select></label>';
@@ -603,11 +603,15 @@ $('rows').onclick=e=>{const tr=e.target.closest('tr[data-index]');if(tr)openBag(
 $('rows').onkeydown=e=>{if(e.key==='Enter'||e.key===' '){const tr=e.target.closest('tr[data-index]');if(tr){e.preventDefault();openBag(tr.dataset.date,Number(tr.dataset.index));}}};
 document.querySelectorAll('.bagtable th').forEach((th,i)=>{if(i===0)return;const column=i-1;th.tabIndex=0;th.setAttribute('role','button');th.onclick=()=>{if(sortColumn===column)sortDirection*=-1;else{sortColumn=column;sortDirection=1;}render();};th.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();th.click();}};});
 function updateMonthDisplay(){
- const month=$('view').value==='month',shell=$('dateInputShell'),display=$('monthDisplay'),value=$('date').value;
- shell.classList.toggle('month-mode',month);
- if(month&&/^\d{4}-\d{2}$/.test(value)){
+ const mode=$('view').value,shell=$('dateInputShell'),display=$('monthDisplay'),value=$('date').value;
+ shell.classList.toggle('month-mode',mode==='month');
+ shell.classList.toggle('day-mode',mode==='day');
+ if(mode==='month'&&/^\d{4}-\d{2}$/.test(value)){
   const [year,number]=value.split('-').map(Number);
-  display.textContent=new Intl.DateTimeFormat('fr-FR',{month:'long',year:'numeric'}).format(new Date(year,number-1,1));
+  display.textContent=new Intl.DateTimeFormat('fr-FR',{month:'short',year:'2-digit'}).format(new Date(year,number-1,1));
+ }else if(mode==='day'&&/^\d{4}-\d{2}-\d{2}$/.test(value)){
+  const [year,month,day]=value.split('-').map(Number);
+  display.textContent=new Intl.DateTimeFormat('fr-FR',{day:'numeric',month:'short',year:'2-digit'}).format(new Date(year,month-1,day));
  }else display.textContent='';
 }
 function syncDateControl(){const input=$('date'),month=$('view').value==='month',year=$('view').value==='year',value=input.value;input.type=year?'number':month?'month':'date';if(year){input.min='2000';input.max='2100';input.step='1';}input.value=year?value.slice(0,4):month?value.slice(0,7):(value.length===4?value+'-01-01':value.length===7?value+'-01':value);$('dateLabel').firstChild.textContent=year?'Année':month?'Mois':'Date';updateMonthDisplay();}
