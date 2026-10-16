@@ -333,7 +333,7 @@ function makeBagField(i,r){
  if(i===0){const choices=[...new Set([...companyCodes(),...Object.values(dataset).flatMap(rows=>(Array.isArray(rows)?rows:[]).map(x=>upper(pick(x,...fields[0])))),upper(value)].filter(Boolean))].sort();return '<label>'+label+'<select '+common+' required><option value="">Choisir CIE</option>'+choices.map(c=>'<option value="'+esc(c)+'" '+(upper(value)===c?'selected':'')+'>'+esc(c)+'</option>').join('')+'</select></label>';}
  if(i===3)return '<div class="bag-tag-field"><label>'+label+'</label><div id="bagTagRows"></div><button type="button" id="bagTagAdd" class="secondary bag-tag-add" aria-label="Ajouter un TAG">+ Ajouter un TAG</button></div>';
  if(i===2||i===5)return '<label>'+label+'<input '+common+' type="text" inputmode="numeric" placeholder="HH:MM" value="'+esc(normalizedClock(value))+'" maxlength="5"></label>';
- if(i===4)return '<label>'+label+'<input '+common+' list="bagInboundChoices" value="'+esc(upper(value))+'" placeholder="LOCAL, RUSH ou vol libre" autocomplete="off"><datalist id="bagInboundChoices"><option value="LOCAL"></option><option value="RUSH"></option></datalist></label>';
+ if(i===4)return '<label class="bag-inbound-field">'+label+'<span class="bag-inbound-controls"><input '+common+' value="'+esc(upper(value))+'" placeholder="N° VOL / LOCAL / RUSH" autocomplete="off"><select id="bagInboundPicker" aria-label="Type de vol d’apport"><option value="">CHOISIR</option><option value="LOCAL">LOCAL</option><option value="RUSH">RUSH</option><option value="FREE">SAISIE LIBRE</option></select></span></label>';
  if(i===7)return '<label>'+label+'<input '+common+' list="bagRemarksList" value="'+esc(upper(value))+'" placeholder="Choisir ou saisir une remarque" autocomplete="off"><datalist id="bagRemarksList">'+[...new Set([...remarkChoices,upper(value)].filter(Boolean))].map(x=>'<option value="'+esc(x)+'"></option>').join('')+'</datalist></label>';
  if(i===10)return '<label>'+label+'<select '+common+'>'+['','SAUVÉ','CHARGÉ','NON CHARGÉ','ANNULÉ'].map(x=>'<option value="'+esc(x)+'" '+(upper(value).replace(/E$/,'É')===x?'selected':'')+'>'+esc(x||'Choisir statut')+'</option>').join('')+'</select></label>';
  if(i===11)return '<label>'+label+'<select '+common+' style="text-transform:none">'+['',...new Set([value,...faultStations].filter(Boolean))].map(x=>'<option value="'+esc(x)+'" '+(x===value?'selected':'')+'>'+esc(x||'Choisir station')+'</option>').join('')+'</select></label>';
@@ -393,6 +393,8 @@ function openBag(day=null,index=null){
  $('bagTitle').textContent=bagEditing?'Dossier bagage':'Nouveau dossier';
  $('bagDate').value=day||new Date(Date.now()-new Date().getTimezoneOffset()*60000).toISOString().slice(0,10);
  $('bagFields').innerHTML=fields.map((keys,i)=>makeBagField(i,r)).join('')+'<label class="bag-closed-field"><input type="checkbox" id="bagClosed" '+(r?.closed===true?'checked':'')+'> DOSSIER CLÔTURÉ</label>';
+ const inboundPicker=$('bagInboundPicker'),inboundInput=$('bagField4');
+ inboundPicker.onchange=()=>{if(inboundPicker.value==='FREE'){inboundInput.value='';inboundInput.focus();}else if(inboundPicker.value)inboundInput.value=inboundPicker.value;inboundPicker.value='';};
  (splitBagTags(r?pick(r,...fields[3]):'').length?splitBagTags(pick(r,...fields[3])):['']).forEach(addBagTag);
  $('bagTagAdd').onclick=()=>{addBagTag();const inputs=document.querySelectorAll('#bagTagRows .bag-tag-input');inputs[inputs.length-1].focus();};
  const company=upper($('bagField0').value.trim());
