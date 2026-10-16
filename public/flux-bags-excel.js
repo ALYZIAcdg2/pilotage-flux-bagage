@@ -1,6 +1,7 @@
 /* Export Excel FLUX BAGAGES — test only. Requires ExcelJS browser bundle. */
 const fields=[['cie','compagnie','airline','company'],['flightNumber','vol','numeroVol','flight'],['departureTime','heureDepart','heure'],['tagNumber','tag','numeroTag'],['inboundFlight','volApport'],['arrivalTime','heureArrivee'],['location','localisation'],['remarks','remarques'],['anomaly','anomalie'],['commentAction','commentaireAction','action','commentaire'],['fluxStatus','status'],['faultStation','fault_station']];
-const names=['DATE','CIE','N° VOL','HEURE DÉPART','N° TAG','VOL APPORT','HEURE ARRIVÉE','LOCALISATION','REMARQUES','ANOMALIE','COMMENTAIRE/ACTION','STATUT','FAULT STATION'];
+const names=['DATE','CIE','N° VOL','HEURE DÉPART','N° TAG','NOMBRE BAGAGES','VOL APPORT','HEURE ARRIVÉE','LOCALISATION','REMARQUES','ANOMALIE','COMMENTAIRE/ACTION','STATUT','FAULT STATION'];
+const tagList=v=>String(v||'').split(/[\/;,\n]+/).map(s=>s.trim()).filter(Boolean);
 const keys=['expected','toProcess','saved','loaded','notLoaded'],labels=['ATTENDUS','À TRAITER','SAUVÉS','CHARGÉS','NON CHARGÉS'];
 const pick=(r,ks)=>ks.map(k=>r?.[k]).find(v=>v!==undefined&&v!==null&&v!=='')??'';
 const num=v=>Number(v)||0;
@@ -12,17 +13,17 @@ function setup(ws,widths){ws.views=[{state:'frozen',ySplit:4}];widths.forEach((w
 function title(ws,text,subtitle,count){ws.mergeCells(1,1,1,count);const c=ws.getCell(1,1);c.value=text;c.font={bold:true,size:18,color:{argb:'FFFFFFFF'}};c.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FF'+dark}};ws.getRow(1).height=35;ws.mergeCells(2,1,2,count);ws.getCell(2,1).value=subtitle;ws.getCell(2,1).font={italic:true,color:{argb:'FF53657A'}};}
 function paintRows(ws,start,end,count){for(let row=start;row<=end;row++){const r=ws.getRow(row);r.height=22;r.eachCell({includeEmpty:true},(cell,col)=>{if(col>count)return;cell.alignment={vertical:'middle',wrapText:true};if(row%2===0)cell.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFF0F5FA'}};});}}
 function pngChart(kind,rows){const c=document.createElement('canvas');c.width=1120;c.height=540;const g=c.getContext('2d');g.fillStyle='#fff';g.fillRect(0,0,c.width,c.height);g.font='bold 30px system-ui';g.fillStyle='#163653';g.fillText(kind==='bar'?'Répartition par compagnie':kind==='line'?'Évolution journalière':'Indicateurs de performance',35,55);
- const palette=['#10b981','#3b82f6','#ef4444'];
+ const palette=['#10b981','#3b82f6','#ef4444','#8b5cf6'];
  if(kind==='bar'){const top=90,barH=Math.min(28,370/Math.max(1,rows.length));rows.slice(0,14).forEach((r,i)=>{const y=top+i*(barH+9),values=[num(r.saved),num(r.loaded),num(r.notLoaded)],total=values.reduce((a,b)=>a+b,0);g.fillStyle='#163653';g.font='16px system-ui';g.fillText(String(r.airline||''),35,y+barH*.8);let x=110;values.forEach((v,j)=>{g.fillStyle=palette[j];const w=total?v/total*880:0;g.fillRect(x,y,w,barH);x+=w;});g.fillStyle='#53657a';g.fillText(String(total),1010,y+barH*.8);});}
- if(kind==='line'){const left=75,right=1060,top=105,bottom=450,max=Math.max(1,...rows.flatMap(r=>[num(r.toProcess),num(r.loaded),num(r.notLoaded)]));g.strokeStyle='#e2e8f0';g.fillStyle='#64748b';g.font='16px system-ui';for(let i=0;i<=4;i++){let y=bottom-(bottom-top)*i/4;g.beginPath();g.moveTo(left,y);g.lineTo(right,y);g.stroke();g.fillText(String(Math.round(max*i/4)),25,y+5);}[['toProcess','#3b82f6'],['loaded','#10b981'],['notLoaded','#ef4444']].forEach(([key,color])=>{g.strokeStyle=color;g.lineWidth=3;g.beginPath();rows.forEach((r,i)=>{const x=left+(rows.length===1?.5:i/(rows.length-1))*(right-left),y=bottom-num(r[key])/max*(bottom-top);i?g.lineTo(x,y):g.moveTo(x,y);});g.stroke();});g.fillStyle='#64748b';g.fillText(rows[0]?.date||'',left,490);g.fillText(rows.at(-1)?.date||'',right-105,490);}
- if(kind==='kpi'){const total=rows.reduce((a,r)=>a+num(r.toProcess),0);[['Chargés','loaded','#3b82f6'],['Sauvés','saved','#10b981'],['Non chargés','notLoaded','#ef4444']].forEach(([label,key,color],i)=>{const x=190+i*370,y=260,v=rows.reduce((a,r)=>a+num(r[key]),0),pct=total?Math.min(1,v/total):0;g.lineWidth=25;g.strokeStyle='#e2e8f0';g.beginPath();g.arc(x,y,100,0,Math.PI*2);g.stroke();g.strokeStyle=color;g.beginPath();g.arc(x,y,100,-Math.PI/2,-Math.PI/2+Math.PI*2*pct);g.stroke();g.fillStyle='#163653';g.textAlign='center';g.font='bold 32px system-ui';g.fillText(Math.round(pct*100)+'%',x,y+10);g.font='20px system-ui';g.fillText(label,x,410);g.font='16px system-ui';g.fillText(v+' / '+total,x,440);});g.textAlign='left';}
+ if(kind==='line'){const left=75,right=1060,top=105,bottom=450,max=Math.max(1,...rows.flatMap(r=>[num(r.toProcess),num(r.loaded),num(r.notLoaded),num(r.cancelled)]));g.strokeStyle='#e2e8f0';g.fillStyle='#64748b';g.font='16px system-ui';for(let i=0;i<=4;i++){let y=bottom-(bottom-top)*i/4;g.beginPath();g.moveTo(left,y);g.lineTo(right,y);g.stroke();g.fillText(String(Math.round(max*i/4)),25,y+5);}[['toProcess','#3b82f6'],['loaded','#10b981'],['notLoaded','#ef4444'],['cancelled','#8b5cf6']].forEach(([key,color])=>{g.strokeStyle=color;g.lineWidth=3;g.beginPath();rows.forEach((r,i)=>{const x=left+(rows.length===1?.5:i/(rows.length-1))*(right-left),y=bottom-num(r[key])/max*(bottom-top);i?g.lineTo(x,y):g.moveTo(x,y);});g.stroke();});g.fillStyle='#64748b';g.fillText(rows[0]?.date||'',left,490);g.fillText(rows.at(-1)?.date||'',right-105,490);}
+ if(kind==='kpi'){const total=rows.reduce((a,r)=>a+num(r.toProcess),0);[['Chargés','loaded','#3b82f6'],['Sauvés','saved','#10b981'],['Non chargés','notLoaded','#ef4444'],['Annulés','cancelled','#8b5cf6']].forEach(([label,key,color],i)=>{const x=150+i*275,y=260,v=rows.reduce((a,r)=>a+num(r[key]),0),pct=total?Math.min(1,v/total):0;g.lineWidth=25;g.strokeStyle='#e2e8f0';g.beginPath();g.arc(x,y,76,0,Math.PI*2);g.stroke();g.strokeStyle=color;g.beginPath();g.arc(x,y,100,-Math.PI/2,-Math.PI/2+Math.PI*2*pct);g.stroke();g.fillStyle='#163653';g.textAlign='center';g.font='bold 32px system-ui';g.fillText(Math.round(pct*100)+'%',x,y+10);g.font='20px system-ui';g.fillText(label,x,380);g.font='16px system-ui';g.fillText(v+' / '+total,x,410);});g.textAlign='left';}
  return c.toDataURL('image/png').split(',')[1];}
 
 const navy='102B49',navy2='173D62',muted='65788D',light='EFF5FA',orange='F97316',white='FFFFFF';
 const fill=hex=>({type:'pattern',pattern:'solid',fgColor:{argb:'FF'+hex}});
 const font=(color=navy,size=11,bold=false)=>({name:'Aptos',size,bold,color:{argb:'FF'+color}});
 const status=r=>String(pick(r,fields[10])).trim().toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
-function statusKey(r){const v=status(r);return v==='CHARGE'?'loaded':v==='NON CHARGE'?'notLoaded':v==='SAUVE'?'saved':'other';}
+function statusKey(r){const v=status(r);return v==='CHARGE'?'loaded':v==='NON CHARGE'?'notLoaded':v==='SAUVE'?'saved':v==='ANNULE'?'cancelled':'other';}
 function fmtDate(s){if(!s)return '';const [y,m,d]=s.split('-');return d+'/'+m+'/'+y;}
 function dateScope(period,from,to){return period==='day'?fmtDate(from):period==='month'?from.slice(0,7).split('-').reverse().join('/'):fmtDate(from)+' — '+fmtDate(to);}
 function band(ws,row,a,b,label,color=navy){
@@ -67,13 +68,13 @@ export async function exportFluxExcel({dataset,metadata={},period,from,to,compan
  const dates=Object.keys(dataset).filter(d=>period==='day'?d===from:period==='month'?d.slice(0,7)===from.slice(0,7):d>=from&&d<=to).sort();
  const selected=dates.flatMap(date=>(dataset[date]||[]).filter(r=>!company||String(pick(r,fields[0])).toUpperCase()===company).map(r=>({date,r})));
  const grouped=new Map(),daily=new Map(),anomalies=new Map(),locations=new Map();
- const blank=()=>({expected:0,toProcess:0,saved:0,loaded:0,notLoaded:0,other:0});
+ const blank=()=>({expected:0,toProcess:0,saved:0,loaded:0,notLoaded:0,cancelled:0,other:0,baggage:0});
  for(const date of dates){
   daily.set(date,{date,...blank()});
   for(const {r} of selected.filter(x=>x.date===date)){
    const cie=String(pick(r,fields[0])).toUpperCase()||'AUTRES';
    if(!grouped.has(cie))grouped.set(cie,{airline:cie,...blank()});
-   for(const m of [grouped.get(cie),daily.get(date)]){m.toProcess++;m[statusKey(r)]++;}
+   for(const m of [grouped.get(cie),daily.get(date)]){m.toProcess++;m[statusKey(r)]++;m.baggage+=tagList(pick(r,fields[3])).length;}
    const anomaly=String(pick(r,fields[8])).trim();if(anomaly)anomalies.set(anomaly,(anomalies.get(anomaly)||0)+1);
    const loc=String(pick(r,fields[6])).trim();if(loc)locations.set(loc,(locations.get(loc)||0)+1);
   }
@@ -85,7 +86,7 @@ export async function exportFluxExcel({dataset,metadata={},period,from,to,compan
  }
  const metrics=[...grouped.values()].sort((a,b)=>b.toProcess-a.toProcess||a.airline.localeCompare(b.airline));
  const dailyRows=[...daily.values()].sort((a,b)=>a.date.localeCompare(b.date));
- const total=selected.length,loaded=selected.filter(x=>statusKey(x.r)==='loaded').length,notLoaded=selected.filter(x=>statusKey(x.r)==='notLoaded').length,saved=selected.filter(x=>statusKey(x.r)==='saved').length,other=total-loaded-notLoaded-saved;
+ const total=selected.length,loaded=selected.filter(x=>statusKey(x.r)==='loaded').length,notLoaded=selected.filter(x=>statusKey(x.r)==='notLoaded').length,saved=selected.filter(x=>statusKey(x.r)==='saved').length,cancelled=selected.filter(x=>statusKey(x.r)==='cancelled').length,other=total-loaded-notLoaded-saved-cancelled;
  const scope=dateScope(period,from,to)+(company?'  •  '+company:'  •  Toutes compagnies');
  const recap=book.addWorksheet('RÉCAPITULATIF');setup(recap,Array(16).fill(12));recap.views=[{state:'frozen',ySplit:3}];hero(recap,'RÉCAPITULATIF',scope,16);
  metric(recap,5,1,4,'DOSSIERS TOTAL',total);metric(recap,5,5,8,'CHARGÉS  '+(total?(100*loaded/total).toFixed(1):'0')+' %',loaded,'168454');
@@ -99,7 +100,7 @@ export async function exportFluxExcel({dataset,metadata={},period,from,to,compan
   row.getCell(8).numFmt='0.0"%"';
  }
  styleData(recap,11,20,8);
- const summary=[['TOTAL',total],['CHARGÉS',loaded],['NON CHARGÉS',notLoaded],['SAUVÉS',saved],['AUTRES',other],['COMPAGNIES',metrics.filter(x=>x.toProcess).length],['JOURNÉES',dates.length]];
+ const summary=[['TOTAL',total],['CHARGÉS',loaded],['NON CHARGÉS',notLoaded],['SAUVÉS',saved],['ANNULÉS',cancelled],['AUTRES',other],['BAGAGES TRAITÉS',selected.reduce((n,x)=>n+tagList(pick(x.r,fields[3])).length,0)],['COMPAGNIES',metrics.filter(x=>x.toProcess).length],['JOURNÉES',dates.length]];
  summary.forEach(([label,value],i)=>{const row=recap.getRow(11+i);recap.mergeCells(11+i,10,11+i,13);const c=row.getCell(10);c.value=label;c.font=font(muted,11,true);row.getCell(14).value=value;row.getCell(14).font=font(navy,13,true);row.height=25;});
  band(recap,23,1,8,'ÉVOLUTION JOURNALIÈRE');band(recap,23,9,16,'RÉPARTITION DES STATUTS');
  addChart(book,recap,'line',dailyRows,24,0,635,300);
@@ -108,18 +109,25 @@ export async function exportFluxExcel({dataset,metadata={},period,from,to,compan
  [...anomalies].sort((a,b)=>b[1]-a[1]).slice(0,8).forEach(([label,n],i)=>{recap.mergeCells(43+i,1,43+i,6);recap.getCell(43+i,1).value=label;recap.getCell(43+i,7).value=n;});
  [...locations].sort((a,b)=>b[1]-a[1]).slice(0,8).forEach(([label,n],i)=>{recap.mergeCells(43+i,9,43+i,14);recap.getCell(43+i,9).value=label;recap.getCell(43+i,15).value=n;});
  recap.pageSetup={...recap.pageSetup,orientation:'landscape',fitToPage:true,fitToWidth:1,fitToHeight:1,printArea:'A1:P52'};
- const dossier=book.addWorksheet('DOSSIERS');setup(dossier,[14,9,13,16,22,17,17,24,25,26,36,18,23]);hero(dossier,'DOSSIERS',scope,13);
- dataHeader(dossier,5,names);for(const {date,r} of selected)dossier.addRow([fmtDate(date),...fields.map(k=>String(pick(r,k)))]);
- styleData(dossier,6,dossier.rowCount,13,12);dossier.views=[{state:'frozen',ySplit:5}];dossier.autoFilter={from:'A5',to:'M'+Math.max(6,dossier.rowCount)};
+ const dossier=book.addWorksheet('DOSSIERS');setup(dossier,[14,9,13,16,22,14,17,17,24,25,26,36,18,23]);hero(dossier,'DOSSIERS',scope,14);
+ dataHeader(dossier,5,names);for(const {date,r} of selected)dossier.addRow([fmtDate(date),...fields.flatMap((k,i)=>i===3?[tagList(pick(r,k)).join('\n'),tagList(pick(r,k)).length]:[String(pick(r,k))])]);
+ styleData(dossier,6,dossier.rowCount,14,13);dossier.views=[{state:'frozen',ySplit:5}];dossier.autoFilter={from:'A5',to:'N'+Math.max(6,dossier.rowCount)};
  for(const date of dates){
   const entries=selected.filter(x=>x.date===date);if(!entries.length)continue;
-  const sheet=book.addWorksheet(date.slice(8,10)+'-'+date.slice(5,7));setup(sheet,[14,9,13,16,22,17,17,24,25,26,36,18,23]);
-  hero(sheet,'JOUR PAR JOUR',fmtDate(date)+(company?'  •  '+company:''),13);
-  const counts={loaded:0,notLoaded:0,saved:0,other:0};for(const {r} of entries)counts[statusKey(r)]++;
-  band(sheet,5,1,13,'DOSSIERS : '+entries.length+'     CHARGÉS : '+counts.loaded+'     NON CHARGÉS : '+counts.notLoaded+'     SAUVÉS : '+counts.saved+'     AUTRES : '+counts.other);
-  dataHeader(sheet,7,names);for(const {r} of entries)sheet.addRow([fmtDate(date),...fields.map(k=>String(pick(r,k)))]);
-  styleData(sheet,8,sheet.rowCount,13,12);sheet.views=[{state:'frozen',ySplit:7}];sheet.autoFilter={from:'A7',to:'M'+Math.max(8,sheet.rowCount)};
+  const sheet=book.addWorksheet(date.slice(8,10)+'-'+date.slice(5,7));setup(sheet,[14,9,13,16,22,14,17,17,24,25,26,36,18,23]);
+  hero(sheet,'JOUR PAR JOUR',fmtDate(date)+(company?'  •  '+company:''),14);
+  const counts={loaded:0,notLoaded:0,saved:0,cancelled:0,other:0};for(const {r} of entries)counts[statusKey(r)]++;
+  band(sheet,5,1,14,'DOSSIERS : '+entries.length+'     CHARGÉS : '+counts.loaded+'     NON CHARGÉS : '+counts.notLoaded+'     SAUVÉS : '+counts.saved+'     ANNULÉS : '+counts.cancelled+'     AUTRES : '+counts.other);
+  dataHeader(sheet,7,names);for(const {r} of entries)sheet.addRow([fmtDate(date),...fields.flatMap((k,i)=>i===3?[tagList(pick(r,k)).join('\n'),tagList(pick(r,k)).length]:[String(pick(r,k))])]);
+  styleData(sheet,8,sheet.rowCount,14,13);sheet.views=[{state:'frozen',ySplit:7}];sheet.autoFilter={from:'A7',to:'N'+Math.max(8,sheet.rowCount)};
  }
+ const dateSummary=book.addWorksheet('SYNTHÈSE PAR DATE');
+ setup(dateSummary,[17,18,18,18,18,18,18,19,19]);
+ hero(dateSummary,'SYNTHÈSE PAR DATE',scope,9);
+ dataHeader(dateSummary,5,['DATE','DOSSIERS','BAGAGES TRAITÉS','BAGAGES ATTENDUS','SAUVÉS','CHARGÉS','NON CHARGÉS','ANNULÉS','AUTRES']);
+ for(const d of dailyRows)dateSummary.addRow([fmtDate(d.date),d.toProcess,d.baggage,d.expected,d.saved,d.loaded,d.notLoaded,d.cancelled,d.other]);
+ styleData(dateSummary,6,dateSummary.rowCount,9);
+ dateSummary.autoFilter={from:'A5',to:'I'+Math.max(6,dateSummary.rowCount)};
  const supervision=book.addWorksheet('SUPERVISION');setup(supervision,Array(14).fill(16));hero(supervision,'COMPTE RENDU DE SUPERVISION',scope,14);
  metric(supervision,5,1,3,'DOSSIERS',total);metric(supervision,5,4,6,'CHARGÉS',loaded,'168454');metric(supervision,5,7,9,'NON CHARGÉS',notLoaded,'C2410C');metric(supervision,5,10,12,'SAUVÉS / AUTRES',saved+other,'52667C');
  band(supervision,9,1,14,'1. SYNTHÈSE GÉNÉRALE');
@@ -136,7 +144,7 @@ export async function exportFluxExcel({dataset,metadata={},period,from,to,compan
  supervision.mergeCells(obs+1,1,obs+2,14);supervision.getCell(obs+1,1).value='Zone réservée à la saisie des observations de supervision. Aucune analyse opérationnelle non vérifiée n’est générée automatiquement.';
  supervision.getCell(obs+1,1).alignment={wrapText:true,vertical:'middle'};supervision.getCell(obs+1,1).font=font(muted,11);
  const graphs=book.addWorksheet('GRAPHIQUES');setup(graphs,Array(12).fill(16));hero(graphs,'GRAPHIQUES',scope,12);
- addChart(book,graphs,'kpi',metrics,5,0,860,390);addChart(book,graphs,'line',dailyRows,27,0,860,390);addChart(book,graphs,'bar',metrics,49,0,860,390);
+ addChart(book,graphs,'kpi',metrics,5,0,1120,390);addChart(book,graphs,'line',dailyRows,27,0,860,390);addChart(book,graphs,'bar',metrics,49,0,860,390);
  const buffer=await book.xlsx.writeBuffer(),name='FLUX_BAGAGES_SUPERVISION_'+(period==='range'?from+'_au_'+to:period==='month'?from.slice(0,7):from)+'_'+(company||'TOUTES')+'.xlsx';
  download(buffer,name);return {name,dossiers:total,compagnies:metrics.length,jours:dates.length};
 }
