@@ -484,7 +484,7 @@ let expectedDialogDate='';
 let expectedPendingCompanies=new Set();
 let expectedPendingRemoved=new Set();
 function expectedCompanyRow(code,value){
- return '<div class="expected-bags-row"><div class="expected-bags-company"><img src="https://images.kiwi.com/airlines/64/'+encodeURIComponent(code)+'.png" loading="lazy" alt="" onerror="this.hidden=true"><span class="expected-bags-name"><strong>'+esc(code)+'</strong><small>'+esc(companyNames[code]||'Compagnie')+(airlineVisible(code)?'':' · Masquée')+'</small></span></div><input type="number" min="0" step="1" inputmode="numeric" aria-label="Bagages attendus '+esc(code)+'" data-expected-company="'+esc(code)+'" value="'+(value===null?'':value)+'" placeholder="—"><button type="button" class="expected-bags-delete" data-delete-expected="'+esc(code)+'" aria-label="Supprimer définitivement '+esc(code)+'" title="Supprimer définitivement '+esc(code)+'"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2m3 0-1 14H6L5 6m5 4v7m4-7v7"/></svg></button></div>';
+ return '<div class="expected-bags-row"><div class="expected-bags-company"><img src="https://images.kiwi.com/airlines/64/'+encodeURIComponent(code)+'.png" loading="lazy" alt="" onerror="this.hidden=true"><span class="expected-bags-name"><strong>'+esc(code)+'</strong><small>'+esc(companyNames[code]||'Compagnie')+(airlineVisible(code)?'':' · Masquée')+'</small></span></div><input type="number" min="0" step="1" inputmode="numeric" aria-label="Bagages attendus '+esc(code)+'" data-expected-company="'+esc(code)+'" value="'+(value===null?'':value)+'" placeholder="—"><button type="button" class="expected-bags-clear" data-clear-expected="'+esc(code)+'" aria-label="Effacer le chiffre de '+esc(code)+'" title="Effacer uniquement le chiffre"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2m3 0-1 14H6L5 6m5 4v7m4-7v7"/></svg></button></div>';
 }
 
 function updateExpectedDialogTotal(){
@@ -522,7 +522,7 @@ async function saveExpectedBagsEditor(closeAfter){
   if(!Number.isSafeInteger(n)||n<0){$('expectedBagsMessage').textContent='Nombre invalide pour '+code+'.';input.focus();return;}
   next[code]=n;
  }
- const removed=[...new Set([...expectedRemovedCodes(),...expectedPendingRemoved])].sort();
+ const removed=[...new Set([...expectedRemovedCodes(),...expectedPendingRemoved])].filter(code=>!expectedPendingCompanies.has(code)).sort();
  const extra=[...new Set([...(Array.isArray(metadata.flux_bags_extra_airlines)?metadata.flux_bags_extra_airlines:[]),...expectedPendingCompanies])].filter(code=>!removed.includes(code)).sort();
  for(const code of removed)delete next[code];
  const b=$('expectedBagsSaveClose');b.disabled=true;
@@ -544,13 +544,14 @@ async function saveExpectedBagsEditor(closeAfter){
 }
 $('expectedBagsAdd').onclick=()=>{
  const code=String($('expectedBagsNewCode').value||'').trim().toUpperCase();
- if(expectedRemovedCodes().has(code)||expectedPendingRemoved.has(code)){$('expectedBagsMessage').textContent='Cette compagnie a été supprimée définitivement.';return;}
+ if(expectedPendingRemoved.has(code)){$('expectedBagsMessage').textContent='Cette compagnie est en attente de suppression. Enregistrer ou fermer sans enregistrer.';return;}
  if(!/^[A-Z0-9]{2,3}$/.test(code)){$('expectedBagsMessage').textContent='Saisir un code compagnie valide (2 ou 3 caractères).';return;}
  const rows=$('expectedBagsRows');
  const existing=[...rows.querySelectorAll('input[data-expected-company]')];
  const found=existing.find(i=>i.dataset.expectedCompany===code);
  if(found){found.focus();$('expectedBagsMessage').textContent=code+' figure déjà dans la liste.';return;}
  expectedPendingCompanies.add(code);
+ if(expectedRemovedCodes().has(code))expectedPendingRemoved.delete(code);
  const rowsValues=new Map(existing.map(input=>[input.dataset.expectedCompany,input.value]));
  rowsValues.set(code,'');
  rows.innerHTML=[...rowsValues.keys()].sort().map(key=>expectedCompanyRow(key,rowsValues.get(key)===''?null:Number(rowsValues.get(key)))).join('');
@@ -561,13 +562,24 @@ $('expectedBagsAdd').onclick=()=>{
  rows.querySelector('[data-expected-company="'+code+'"]').focus();
 };
 $('expectedBagsRows').onclick=e=>{
- const btn=e.target.closest('[data-delete-expected]');if(!btn)return;
- const code=btn.dataset.deleteExpected;
- if(!confirm('Supprimer définitivement '+code+' de la liste des BAGAGES ATTENDUS ? Les dossiers historiques ne seront pas supprimés.'))return;
+ const btn=e.target.closest('[data-clear-expected]');if(!btn)return;
+ const input=btn.closest('.expected-bags-row').querySelector('[data-expected-company]');
+ if(!input)return;
+ input.value='';updateExpectedDialogTotal();
+ $('expectedBagsMessage').textContent='Chiffre effacé pour '+input.dataset.expectedCompany+'. Enregistrer pour confirmer.';
+};
+$('expectedBagsRemove').onclick=()=>{
+ const code=String($('expectedBagsNewCode').value||'').trim().toUpperCase();
+ if(!/^[A-Z0-9]{2,3}$/.test(code)){$('expectedBagsMessage').textContent='Saisir le code de la compagnie à supprimer.';return;}
+ if(![...$('expectedBagsRows').querySelectorAll('[data-expected-company]')].some(input=>input.dataset.expectedCompany===code)){
+  $('expectedBagsMessage').textContent=code+' est absente de la liste.';return;
+ }
+ if(!confirm('Supprimer définitivement la compagnie '+code+' des BAGAGES ATTENDUS ? Les dossiers historiques seront conservés.'))return;
  expectedPendingRemoved.add(code);expectedPendingCompanies.delete(code);
- btn.closest('.expected-bags-row').remove();
+ $('expectedBagsRows').querySelector('[data-expected-company="'+code+'"]').closest('.expected-bags-row').remove();
+ $('expectedBagsNewCode').value='';
  $('expectedBagsPeriod').textContent='Date : '+displayDate(expectedDialogDate)+' · '+$('expectedBagsRows').querySelectorAll('[data-expected-company]').length+' compagnies';
- $('expectedBagsMessage').textContent=code+' retirée. Clique sur Enregistrer pour confirmer définitivement.';
+ $('expectedBagsMessage').textContent=code+' supprimée de la liste. Enregistrer pour confirmer.';
  updateExpectedDialogTotal();
 };
 $('expectedBagsDate').onchange=()=>{
