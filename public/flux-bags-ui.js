@@ -91,6 +91,7 @@ try{
 }catch{}
 const airlineVisible=code=>!hiddenAirlines.has(String(code||'').trim().toUpperCase());
 function persistAirlineVisibility(){try{localStorage.setItem(AIRLINE_VISIBILITY_KEY,JSON.stringify([...hiddenAirlines]));}catch{}}
+const expectedRemovedCodes=()=>new Set(Array.isArray(metadata.flux_bags_removed_expected_airlines)?metadata.flux_bags_removed_expected_airlines:[]);
 function visibilityCodes(){
  const month=$('date').value.slice(0,7);
  return [...new Set([
@@ -100,7 +101,7 @@ function visibilityCodes(){
  ...Object.keys(dataset).flatMap(date=>dailySummaryFor(date).map(r=>String(r.airline||'').trim().toUpperCase())),
  ...Object.entries(metadata).filter(([key])=>key.startsWith('flux_bags_monthly_')).flatMap(([,rows])=>(Array.isArray(rows)?rows:[]).map(r=>String(r.airline||'').trim().toUpperCase())),
  ...Object.entries(metadata).filter(([key])=>key.startsWith('flux_bags_daily_summary_')).flatMap(([,days])=>Object.values(days||{}).flatMap(rows=>(Array.isArray(rows)?rows:[]).map(r=>String(r.airline||'').trim().toUpperCase())))
- ])].filter(code=>/^[A-Z0-9]{2,3}$/.test(code)).sort();
+ ])].filter(code=>/^[A-Z0-9]{2,3}$/.test(code)&&!expectedRemovedCodes().has(code)).sort();
 }
 function renderAirlineVisibilityCards(){
  const codes=visibilityCodes();
@@ -474,8 +475,9 @@ function kpiCompanyStats(key){
 const SEPT_2026_EXPECTED_EXCEL={SK:4758,AI:9011,EI:17510,LA:7669,HF:13252,SB:3602,DE:5215,MH:6770,RJ:4421,AV:5214,FI:9141,AT:10427,JU:4332,LO:4866};
 let expectedDialogMonth='';
 let expectedPendingCompanies=new Set();
+let expectedPendingRemoved=new Set();
 function expectedCompanyRow(code,value){
- return '<div class="expected-bags-row"><div class="expected-bags-company"><img src="https://images.kiwi.com/airlines/64/'+encodeURIComponent(code)+'.png" loading="lazy" alt="" onerror="this.hidden=true"><span class="expected-bags-name"><strong>'+esc(code)+'</strong><small>'+esc(companyNames[code]||'Compagnie')+(airlineVisible(code)?'':' · Masquée')+'</small></span></div><input type="number" min="0" step="1" inputmode="numeric" aria-label="Bagages attendus '+esc(code)+'" data-expected-company="'+esc(code)+'" value="'+(value===null?'':value)+'" placeholder="—"></div>';
+ return '<div class="expected-bags-row"><div class="expected-bags-company"><img src="https://images.kiwi.com/airlines/64/'+encodeURIComponent(code)+'.png" loading="lazy" alt="" onerror="this.hidden=true"><span class="expected-bags-name"><strong>'+esc(code)+'</strong><small>'+esc(companyNames[code]||'Compagnie')+(airlineVisible(code)?'':' · Masquée')+'</small></span></div><input type="number" min="0" step="1" inputmode="numeric" aria-label="Bagages attendus '+esc(code)+'" data-expected-company="'+esc(code)+'" value="'+(value===null?'':value)+'" placeholder="—"><button type="button" class="expected-bags-delete" data-delete-expected="'+esc(code)+'" aria-label="Supprimer définitivement '+esc(code)+'" title="Supprimer définitivement '+esc(code)+'">✕</button></div>';
 }
 
 function updateExpectedDialogTotal(){
@@ -492,7 +494,8 @@ function updateExpectedDialogTotal(){
 function openExpectedBagsEditor(){
  expectedDialogMonth=currentMonth();
  expectedPendingCompanies=new Set();
- const month=expectedDialogMonth,codes=[...new Set([...visibilityCodes(),...Object.keys(metadata['flux_bags_expected_'+month]||{}),...(month==='2026-09'?Object.keys(SEPT_2026_EXPECTED_EXCEL):[])])].sort();
+ expectedPendingRemoved=new Set();
+ const month=expectedDialogMonth,codes=[...new Set([...visibilityCodes(),...Object.keys(metadata['flux_bags_expected_'+month]||{}),...(month==='2026-09'?Object.keys(SEPT_2026_EXPECTED_EXCEL):[])])].filter(code=>!expectedRemovedCodes().has(code)).sort();
  $('expectedBagsPeriod').textContent='Mois : '+month+' · '+codes.length+' compagnies';
  $('expectedBagsMessage').textContent='';
  $('expectedBagsPrefill').hidden=month!=='2026-09';
@@ -509,14 +512,18 @@ async function saveExpectedBagsEditor(closeAfter){
   if(!Number.isSafeInteger(n)||n<0){$('expectedBagsMessage').textContent='Nombre invalide pour '+code+'.';input.focus();return;}
   next[code]=n;
  }
- const extra=[...new Set([...(Array.isArray(metadata.flux_bags_extra_airlines)?metadata.flux_bags_extra_airlines:[]),...expectedPendingCompanies])].sort();
+ const removed=[...new Set([...expectedRemovedCodes(),...expectedPendingRemoved])].sort();
+ const extra=[...new Set([...(Array.isArray(metadata.flux_bags_extra_airlines)?metadata.flux_bags_extra_airlines:[]),...expectedPendingCompanies])].filter(code=>!removed.includes(code)).sort();
+ for(const code of removed)delete next[code];
  const a=$('expectedBagsSave'),b=$('expectedBagsSaveClose');a.disabled=true;b.disabled=true;
  $('expectedBagsMessage').textContent='Enregistrement en cours…';
  try{
-  await save({days:[],metadata:{[key]:next,flux_bags_extra_airlines:extra}});
+  await save({days:[],metadata:{[key]:next,flux_bags_extra_airlines:extra,flux_bags_removed_expected_airlines:removed}});
   metadata[key]=next;
   metadata.flux_bags_extra_airlines=extra;
+  metadata.flux_bags_removed_expected_airlines=removed;
   expectedPendingCompanies.clear();
+  expectedPendingRemoved.clear();
   render();
   if($('summaryDialog').open)renderSummary();
   if($('chartsDialog').open)renderCharts();
@@ -527,6 +534,7 @@ async function saveExpectedBagsEditor(closeAfter){
 }
 $('expectedBagsAdd').onclick=()=>{
  const code=String($('expectedBagsNewCode').value||'').trim().toUpperCase();
+ if(expectedRemovedCodes().has(code)||expectedPendingRemoved.has(code)){$('expectedBagsMessage').textContent='Cette compagnie a été supprimée définitivement.';return;}
  if(!/^[A-Z0-9]{2,3}$/.test(code)){$('expectedBagsMessage').textContent='Saisir un code compagnie valide (2 ou 3 caractères).';return;}
  const rows=$('expectedBagsRows');
  const existing=[...rows.querySelectorAll('input[data-expected-company]')];
@@ -541,6 +549,16 @@ $('expectedBagsAdd').onclick=()=>{
  $('expectedBagsMessage').textContent=code+' ajouté. Enregistrer pour conserver la compagnie.';
  updateExpectedDialogTotal();
  rows.querySelector('[data-expected-company="'+code+'"]').focus();
+};
+$('expectedBagsRows').onclick=e=>{
+ const btn=e.target.closest('[data-delete-expected]');if(!btn)return;
+ const code=btn.dataset.deleteExpected;
+ if(!confirm('Supprimer définitivement '+code+' de la liste des BAGAGES ATTENDUS ? Les dossiers historiques ne seront pas supprimés.'))return;
+ expectedPendingRemoved.add(code);expectedPendingCompanies.delete(code);
+ btn.closest('.expected-bags-row').remove();
+ $('expectedBagsPeriod').textContent='Mois : '+expectedDialogMonth+' · '+$('expectedBagsRows').querySelectorAll('[data-expected-company]').length+' compagnies';
+ $('expectedBagsMessage').textContent=code+' retirée. Clique sur Enregistrer pour confirmer définitivement.';
+ updateExpectedDialogTotal();
 };
 $('expectedBagsClose').onclick=()=>$('expectedBagsDialog').close();
 $('expectedBagsRows').oninput=updateExpectedDialogTotal;
