@@ -525,7 +525,7 @@ async function saveExpectedBagsEditor(closeAfter){
  const removed=[...new Set([...expectedRemovedCodes(),...expectedPendingRemoved])].sort();
  const extra=[...new Set([...(Array.isArray(metadata.flux_bags_extra_airlines)?metadata.flux_bags_extra_airlines:[]),...expectedPendingCompanies])].filter(code=>!removed.includes(code)).sort();
  for(const code of removed)delete next[code];
- const a=$('expectedBagsSave'),b=$('expectedBagsSaveClose');a.disabled=true;b.disabled=true;
+ const b=$('expectedBagsSaveClose');b.disabled=true;
  $('expectedBagsMessage').textContent='Enregistrement en cours…';
  try{
   await save({days:[],metadata:{[key]:next,flux_bags_extra_airlines:extra,flux_bags_removed_expected_airlines:removed}});
@@ -540,7 +540,7 @@ async function saveExpectedBagsEditor(closeAfter){
   $('expectedBagsMessage').textContent='Enregistré dans TEST · total affiché : '+$('expectedBagsTotal').textContent;
   if(closeAfter)$('expectedBagsDialog').close();
  }catch(err){$('expectedBagsMessage').textContent='Erreur : '+err.message;}
- finally{a.disabled=false;b.disabled=false;}
+ finally{b.disabled=false;}
 }
 $('expectedBagsAdd').onclick=()=>{
  const code=String($('expectedBagsNewCode').value||'').trim().toUpperCase();
@@ -592,7 +592,16 @@ $('expectedBagsPrefill').onclick=()=>{
  updateExpectedDialogTotal();
  $('expectedBagsMessage').textContent='14 valeurs de septembre préremplies. Clique sur « Enregistrer et fermer » pour les sauvegarder.';
 };
-$('expectedBagsSave').onclick=()=>saveExpectedBagsEditor(false);
+function moveExpectedBagsDate(delta){
+ const input=$('expectedBagsDate'),value=input.value;
+ if(!/^\d{4}-\d{2}-\d{2}$/.test(value))return;
+ const [year,month,day]=value.split('-').map(Number);
+ const date=new Date(Date.UTC(year,month-1,day+delta));
+ input.value=date.toISOString().slice(0,10);
+ input.dispatchEvent(new Event('change',{bubbles:true}));
+}
+$('expectedBagsPrevDay').onclick=()=>moveExpectedBagsDate(-1);
+$('expectedBagsNextDay').onclick=()=>moveExpectedBagsDate(1);
 $('expectedBagsSaveClose').onclick=()=>saveExpectedBagsEditor(true);
 
 function openKpiList(index,company=null){
