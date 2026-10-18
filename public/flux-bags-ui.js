@@ -104,7 +104,7 @@ function matchesBagSearch(r,raw){
  const combined=q.match(/^([A-Z]{2,3})(\d+)$/);
  if(combined){if(cie===combined[1]&&flight.replace(/^[A-Z]{2,3}/,'')===combined[2])return true;return splitBagTags(pick(r,...fields[3])).some(tag=>tag.toUpperCase().replace(/[^A-Z0-9]/g,'').includes(q));}
  // Airline codes are matched to the company column, not arbitrary text fields.
- if(/^[A-Z]{2,3}$/.test(q))return cie===q;
+ if(/^[A-Z]{2,3}$/.test(q))return cie===q||flight.startsWith(q)||splitBagTags(pick(r,...fields[3])).some(tag=>tag.toLocaleUpperCase('fr').replace(/[^A-Z0-9]/g,'').startsWith(q));
  return fields.some(keys=>String(pick(r,...keys)).toLocaleUpperCase('fr').includes(q));
 }
 function visibleRows(){const company=$('airline').value,search=$('search').value.trim().toLowerCase();return allRows().filter(({r})=>airlineVisible(pick(r,...fields[0]))&&(!company||String(pick(r,...fields[0])).toUpperCase()===company)&&(!search||matchesBagSearch(r,search))).sort((a,b)=>{const x=sortColumn===0?a.date:sortColumn===5?String(bagCount(a.r)):String(pick(a.r,...fields[sortColumn>5?sortColumn-2:sortColumn-1])),y=sortColumn===0?b.date:sortColumn===5?String(bagCount(b.r)):String(pick(b.r,...fields[sortColumn>5?sortColumn-2:sortColumn-1]));return sortDirection*x.localeCompare(y,'fr',{numeric:true,sensitivity:'base'});});}
