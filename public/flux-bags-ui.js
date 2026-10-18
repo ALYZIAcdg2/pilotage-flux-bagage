@@ -1,5 +1,29 @@
 import {normalizeFluxStatus} from './flux-bags-model.js';
 const $=id=>document.getElementById(id);
+
+// Confirmation visuelle ALYZIA, sans boîte native du navigateur.
+function alyziaConfirm(message,{title='CONFIRMER LA SUPPRESSION'}={}){
+ return new Promise(resolve=>{
+  const dialog=$('alyziaConfirmDialog');
+  if(!dialog){resolve(false);return;}
+  const messageEl=$('alyziaConfirmMessage');
+  const cancel=$('alyziaConfirmCancel');
+  const accept=$('alyziaConfirmAccept');
+  const close=()=>{dialog.removeEventListener('close',onClose);cancel.removeEventListener('click',onCancel);accept.removeEventListener('click',onAccept);};
+  let answered=false;
+  const finish=value=>{if(answered)return;answered=true;close();dialog.close();resolve(value);};
+  const onClose=()=>{if(!answered){answered=true;close();resolve(false);}};
+  const onCancel=()=>finish(false);
+  const onAccept=()=>finish(true);
+  $('alyziaConfirmTitle').textContent=title;
+  messageEl.textContent=message;
+  cancel.addEventListener('click',onCancel);
+  accept.addEventListener('click',onAccept);
+  dialog.addEventListener('close',onClose);
+  try{dialog.showModal();cancel.focus();}catch(e){close();resolve(false);}
+ });
+}
+
 const USER_NAMES=['NADIA','CELINE','DEJAN','MAOU','MARK','DIEME','MARYAM','LUCIA','CARO','YASS','SLY','COCO'];
 const USER_SESSION_KEY='flux_bags_test_user_session_v1';
 let sessionUser='';
@@ -424,7 +448,7 @@ $('bagDelete').onclick=async()=>{
  if(!record){$('bagStatus').textContent='Dossier introuvable. Actualise la page.';return;}
  const company=String(pick(record,...fields[0]));
  const tag=String(pick(record,...fields[3]));
- if(!confirm('Supprimer définitivement le dossier '+company+' / '+tag+' du '+day+' ?'))return;
+ if(!await alyziaConfirm('Supprimer définitivement le dossier '+company+' / '+tag+' du '+day+' ?'))return;
  $('bagDelete').disabled=true;$('bagSave').disabled=true;$('bagStatus').textContent='Suppression en cours…';
  try{
   const response=await fetch('/api/data',{cache:'no-store'});
@@ -574,7 +598,7 @@ $('expectedBagsRemove').onclick=()=>{
  if(![...$('expectedBagsRows').querySelectorAll('[data-expected-company]')].some(input=>input.dataset.expectedCompany===code)){
   $('expectedBagsMessage').textContent=code+' est absente de la liste.';return;
  }
- if(!confirm('Supprimer définitivement la compagnie '+code+' des BAGAGES ATTENDUS ? Les dossiers historiques seront conservés.'))return;
+ if(!await alyziaConfirm('Supprimer définitivement la compagnie '+code+' des BAGAGES ATTENDUS ? Les dossiers historiques seront conservés.'))return;
  expectedPendingRemoved.add(code);expectedPendingCompanies.delete(code);
  $('expectedBagsRows').querySelector('[data-expected-company="'+code+'"]').closest('.expected-bags-row').remove();
  $('expectedBagsNewCode').value='';
