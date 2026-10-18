@@ -592,7 +592,7 @@ $('expectedBagsRows').onclick=e=>{
  input.value='';updateExpectedDialogTotal();
  $('expectedBagsMessage').textContent='Chiffre effacé pour '+input.dataset.expectedCompany+'. Enregistrer pour confirmer.';
 };
-$('expectedBagsRemove').onclick=()=>{
+$('expectedBagsRemove').onclick=async()=>{
  const code=String($('expectedBagsNewCode').value||'').trim().toUpperCase();
  if(!/^[A-Z0-9]{2,3}$/.test(code)){$('expectedBagsMessage').textContent='Saisir le code de la compagnie à supprimer.';return;}
  if(![...$('expectedBagsRows').querySelectorAll('[data-expected-company]')].some(input=>input.dataset.expectedCompany===code)){
