@@ -441,6 +441,7 @@ function openBag(day=null,index=null){
  const company=upper($('bagField0').value.trim());
  $('bagField0').dataset.previous=company;
  $('bagField0').addEventListener('change',updateBagPrefixes);
+ $('bagField1').addEventListener('input',e=>{const el=e.target,pos=el.selectionStart;const before=el.value;el.value=before.replace(/[^0-9]/g,'');if(pos!==null){const caret=before.slice(0,pos).replace(/[^0-9]/g,'').length;el.setSelectionRange(caret,caret);}});
  for(const i of [2,5])$('bagField'+i).addEventListener('blur',e=>{e.target.value=normalizedClock(e.target.value);});
  $('bagFields').querySelectorAll('input:not([style*="text-transform:none"])').forEach(el=>el.addEventListener('input',()=>{const start=el.selectionStart,end=el.selectionEnd;el.value=upper(el.value);if(start!==null)el.setSelectionRange(start,end);}));
  $('bagDelete').hidden=!bagEditing;
