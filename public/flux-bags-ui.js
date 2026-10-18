@@ -371,7 +371,7 @@ function makeBagField(i,r){
  const keys=fields[i],value=r?String(pick(r,...keys)):'',label=['CIE','N° VOL','HEURE DÉPART','N° TAG','VOL APPORT','HEURE ARV.','LOCALISATION','REMARQUES','ANOMALIE','COMMENTAIRE/ACTION','STATUT','FAULT STATION'][i];
  const name='field'+i,common=' name="'+name+'" id="bagField'+i+'" ';
  if(i===0){const choices=[...new Set([...companyCodes(),...Object.values(dataset).flatMap(rows=>(Array.isArray(rows)?rows:[]).map(x=>upper(pick(x,...fields[0])))),upper(value)].filter(Boolean))].sort();return '<label>'+label+'<select '+common+' required><option value="">Choisir CIE</option>'+choices.map(c=>'<option value="'+esc(c)+'" '+(upper(value)===c?'selected':'')+'>'+esc(c)+'</option>').join('')+'</select></label>';}
- if(i===1){const cie=upper(r?pick(r,...fields[0]):'');return '<label>'+label+'<span class="bag-flight-controls"><span id="bagFlightPrefix" class="bag-flight-prefix">'+esc(cie)+'</span><input '+common+' inputmode="numeric" value="'+esc(upper(value).startsWith(cie)?upper(value).slice(cie.length):upper(value))+'" placeholder="N° VOL" autocomplete="off"></span></label>';}
+ if(i===1){const cie=upper(r?pick(r,...fields[0]):'');return '<label>'+label+'<span class="bag-flight-controls" data-airline="'+esc(cie)+'"><span id="bagFlightPrefix" class="bag-flight-prefix" aria-hidden="true">'+esc(cie)+'</span><input '+common+' inputmode="numeric" value="'+esc(upper(value).startsWith(cie)?upper(value).slice(cie.length):upper(value))+'" placeholder="N° VOL" autocomplete="off"></span></label>';}
  if(i===3)return '<div class="bag-tag-field"><label>'+label+'</label><div id="bagTagRows"></div><button type="button" id="bagTagAdd" class="secondary bag-tag-add" aria-label="Ajouter un TAG">+ Ajouter un TAG</button></div>';
  if(i===2||i===5)return '<label>'+label+'<input '+common+' type="text" inputmode="numeric" placeholder="HH:MM" value="'+esc(normalizedClock(value))+'" maxlength="5"></label>';
  if(i===4)return '<label class="bag-inbound-field">'+label+'<span class="bag-inbound-controls"><input '+common+' value="'+esc(upper(value))+'" placeholder="N° VOL / LOCAL / RUSH" autocomplete="off"><select id="bagInboundPicker" aria-label="Type de vol d’apport"><option value="">CHOIX</option><option value="LOCAL">LOCAL</option><option value="RUSH">RUSH</option><option value="FREE">SAISIE LIBRE</option></select></span></label>';
@@ -396,7 +396,7 @@ const bagTags=()=>[...document.querySelectorAll('#bagTagRows .bag-tag-input')].m
 function updateBagPrefixes(){
  const company=upper($('bagField0').value.trim()),flight=$('bagField1'),tags=[...document.querySelectorAll('#bagTagRows .bag-tag-input')];
  if(!company)return;
- const old=$('bagField0').dataset.previous||'';if($('bagFlightPrefix'))$('bagFlightPrefix').textContent=company;
+ const old=$('bagField0').dataset.previous||'';if($('bagFlightPrefix'))$('bagFlightPrefix').textContent=company;const flightShell=document.querySelector('#bagFields .bag-flight-controls');if(flightShell)flightShell.dataset.airline=company;
  const apply=(input)=>{let value=upper(input.value.trim());if(old&&value.startsWith(old))value=value.slice(old.length);if(value.startsWith(company))value=value.slice(company.length);if(!value||/^\d+$/.test(value))input.value=company+value;};
  if(flight)flight.value=upper(flight.value).replace(/[^0-9]/g,'');tags.forEach(apply);$('bagField0').dataset.previous=company;
 }
