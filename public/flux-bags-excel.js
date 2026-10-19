@@ -191,7 +191,7 @@ function fluxRows({dataset,period,from,to,company}){
  return {dates,entries};
 }
  const dateSerial=d=>Math.round((Date.parse(d+'T00:00:00Z')-Date.UTC(1899,11,30))/86400000);
- const setExcelDate=(doc,row,col,d)=>{fluxCell(doc,row,col,d?dateSerial(d):'');const ref=fluxColumnName(col)+row.getAttribute('r');const cell=Array.from(row.children).find(x=>x.getAttribute('r')===ref);if(cell&&d)cell.setAttribute('s','1');};
+ const setExcelDate=(doc,row,col,d)=>{fluxCell(doc,row,col,d?dateSerial(d):'');const ref=fluxColumnName(col)+row.getAttribute('r');const cell=Array.from(row.children).find(x=>x.getAttribute('r')===ref);if(cell&&d)cell.setAttribute('s',String(dateStyleIndex));};
 export async function exportFluxExcel({dataset,metadata={},period,from,to,company}){
  window.__fluxExportMetadata=metadata;
  const {dates,entries}=fluxRows({dataset,period,from,to,company});
@@ -202,6 +202,12 @@ export async function exportFluxExcel({dataset,metadata={},period,from,to,compan
  const zip=await JSZip.loadAsync(await response.arrayBuffer());
  const parser=new DOMParser(),serializer=new XMLSerializer();
  const load=async file=>{const raw=await zip.file(file)?.async('string');if(!raw)throw new Error('Feuille du modèle manquante : '+file);const doc=parser.parseFromString(raw,'application/xml');if(doc.getElementsByTagName('parsererror').length)throw new Error('XML invalide : '+file);return doc;};
+ const styles=await load('xl/styles.xml');
+ const numFmts=styles.getElementsByTagNameNS(fluxNS,'numFmts')[0]||styles.createElementNS(fluxNS,'numFmts');
+ if(!numFmts.parentNode)styles.documentElement.insertBefore(numFmts,styles.documentElement.firstChild);
+ const fmt=styles.createElementNS(fluxNS,'numFmt');fmt.setAttribute('numFmtId','180');fmt.setAttribute('formatCode','dd/mm/yyyy');numFmts.appendChild(fmt);numFmts.setAttribute('count',String(numFmts.children.length));
+ const xfs=styles.getElementsByTagNameNS(fluxNS,'cellXfs')[0];if(!xfs)throw new Error('Styles Excel manquants');
+ const dateStyleIndex=xfs.children.length;const xf=xfs.children[0].cloneNode(true);xf.setAttribute('numFmtId','180');xf.setAttribute('applyNumberFormat','1');xfs.appendChild(xf);xfs.setAttribute('count',String(xfs.children.length));zip.file('xl/styles.xml',serializer.serializeToString(styles));
  const dossier=await load('xl/worksheets/sheet2.xml'),base=await load('xl/worksheets/sheet5.xml');
  const stats=new Map(),daily=new Map();
  const blank=()=>({total:0,loaded:0,notLoaded:0,saved:0,cancelled:0,other:0,expected:0});
@@ -293,6 +299,12 @@ export async function exportFluxExcel({dataset,metadata={},period,from,to,compan
  const wb=await load('xl/workbook.xml'),calc=wb.getElementsByTagNameNS(fluxNS,'calcPr')[0]||wb.createElementNS(fluxNS,'calcPr');
  calc.setAttribute('fullCalcOnLoad','1');calc.setAttribute('forceFullCalc','1');calc.setAttribute('calcMode','auto');if(!calc.parentNode)wb.documentElement.appendChild(calc);
  zip.file('xl/workbook.xml',serializer.serializeToString(wb));
+ // A modified formula workbook must not retain its stale calculation chain.
+ zip.remove('xl/calcChain.xml');
+ const relPath='xl/_rels/workbook.xml.rels',relRaw=await zip.file(relPath)?.async('string');
+ if(relRaw){const relDoc=parser.parseFromString(relRaw,'application/xml');for(const el of Array.from(relDoc.documentElement.children))if((el.getAttribute('Type')||'').endsWith('/calcChain'))el.remove();zip.file(relPath,serializer.serializeToString(relDoc));}
+ const typesRaw=await zip.file('[Content_Types].xml')?.async('string');
+ if(typesRaw){const typesDoc=parser.parseFromString(typesRaw,'application/xml');for(const el of Array.from(typesDoc.documentElement.children))if(el.getAttribute('PartName')==='/xl/calcChain.xml')el.remove();zip.file('[Content_Types].xml',serializer.serializeToString(typesDoc));}
  const buffer=await zip.generateAsync({type:'arraybuffer',compression:'DEFLATE',compressionOptions:{level:6}});
  const name='FLUX_BAGAGES_SUPERVISION_'+(period==='range'?from+'_au_'+to:period==='month'?from.slice(0,7):from)+'_'+(company||'TOUTES')+'.xlsx';
  download(buffer,name);
