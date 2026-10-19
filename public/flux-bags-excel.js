@@ -65,7 +65,7 @@ function addChart(book,ws,kind,rows,row,col,width=850,height=385){
 async function legacyExportFluxExcel({dataset,metadata={},period,from,to,company}){
  const ExcelJS=await loadExcelJS(),book=new ExcelJS.Workbook();
  book.creator='ALYZIA CDG2 — PILOTAGE FLUX BAGAGE';book.created=new Date();
- const dates=[...new Set([...Object.keys(dataset),...Object.keys(window.__fluxExportMetadata||{}).filter(k=>/^flux_bags_expected_daily_\d{4}-\d{2}-\d{2}$/.test(k)).map(k=>k.slice(25))])].filter(d=>period==='day'?d===from:period==='month'?d.slice(0,7)===from.slice(0,7):d>=from&&d<=to).sort();
+ const dates=[...new Set([...Object.keys(dataset),...Object.keys(window.__fluxExportMetadata||{}).filter(k=>/^flux_bags_expected_daily_\d{4}-\d{2}-\d{2}$/.test(k)).map(k=>k.replace('flux_bags_expected_daily_',''))])].filter(d=>period==='day'?d===from:period==='month'?d.slice(0,7)===from.slice(0,7):d>=from&&d<=to).sort();
  const selected=dates.flatMap(date=>(dataset[date]||[]).filter(r=>!company||String(pick(r,fields[0])).toUpperCase()===company).map(r=>({date,r})));
  const grouped=new Map(),daily=new Map(),anomalies=new Map(),locations=new Map();
  const blank=()=>({expected:0,toProcess:0,saved:0,loaded:0,notLoaded:0,cancelled:0,other:0,baggage:0});
@@ -212,6 +212,7 @@ export async function exportFluxExcel({dataset,metadata={},period,from,to,compan
    const key=statusKey(r);if(!stats.has(cie))stats.set(cie,blank());for(const m of [stats.get(cie),daily.get(e.date)]){m.total++;m[key]++;}
   }
   fluxWriteCells(dossier,6+i,values);fluxWriteCells(base,6+i,values);
+  if(e){for(const doc of [dossier,base]){const rr=fluxRow(doc,doc.getElementsByTagNameNS(fluxNS,'sheetData')[0],6+i);setExcelDate(doc,rr,0,e.date);}}
  }
  // Expected baggage counts are independent user-entered KPI values, not dossier counts.
  const expectedByDate=new Map(),expectedByAirline=new Map();
@@ -238,6 +239,7 @@ export async function exportFluxExcel({dataset,metadata={},period,from,to,compan
  }
  for(const [code,v] of expectedByAirline){if(!stats.has(code))stats.set(code,blank());stats.get(code).expected=v;}
  const dateSerial=d=>Math.round((Date.parse(d+'T00:00:00Z')-Date.UTC(1899,11,30))/86400000);
+ const setExcelDate=(doc,row,col,d)=>{fluxCell(doc,row,col,d?dateSerial(d):'');const ref=fluxColumnName(col)+row.getAttribute('r');const cell=Array.from(row.children).find(x=>x.getAttribute('r')===ref);if(cell&&d)cell.setAttribute('s','1');};
  const sharedRaw=await zip.file('xl/sharedStrings.xml')?.async('string');
  const sharedDoc=sharedRaw?parser.parseFromString(sharedRaw,'application/xml'):null;
  const shared=sharedDoc?Array.from(sharedDoc.getElementsByTagNameNS(fluxNS,'si')).map(si=>Array.from(si.getElementsByTagNameNS(fluxNS,'t')).map(t=>t.textContent).join('')):[];
@@ -256,7 +258,7 @@ export async function exportFluxExcel({dataset,metadata={},period,from,to,compan
  for(let i=0;i<31;i++){
   const d=dates[i],row=fluxRow(synth,synth.getElementsByTagNameNS(fluxNS,'sheetData')[0],6+i);
    for(let k=8;k<22;k++)fluxCell(synth,row,k,0);
-  fluxCell(synth,row,0,d?dateSerial(d):'');
+  setExcelDate(synth,row,0,d);
   for(let col=8;col<22;col++){
    const code=cellText(synth,fluxColumnName(col)+'5').trim().toUpperCase();
    fluxCell(synth,row,col,d?(expectedByDate.get(d)?.get(code)||0):0);
@@ -267,10 +269,10 @@ export async function exportFluxExcel({dataset,metadata={},period,from,to,compan
  }
  // Restore the date dropdown at C5, backed by a list of dates in hidden helper column AA.
  const dateOptions=dates.slice(0,31);
- for(let i=0;i<31;i++){const dr=fluxRow(daySheet,daySheet.getElementsByTagNameNS(fluxNS,'sheetData')[0],5+i);fluxCell(daySheet,dr,26,dateOptions[i]?dateSerial(dateOptions[i]):'');}
+ for(let i=0;i<31;i++){const dr=fluxRow(daySheet,daySheet.getElementsByTagNameNS(fluxNS,'sheetData')[0],5+i);setExcelDate(daySheet,dr,26,dateOptions[i]);}
  const data=daySheet.getElementsByTagNameNS(fluxNS,'sheetData')[0],chosen=fluxRow(daySheet,data,5);
  const current=Array.from(chosen.children).find(c=>c.getAttribute('r')==='C5');
- if(!current||!dateOptions.some(d=>String(dateSerial(d))===(current.getElementsByTagNameNS(fluxNS,'v')[0]?.textContent||'')))fluxCell(daySheet,chosen,2,dateOptions.length?dateSerial(dateOptions[0]):'');
+ if(!current||!dateOptions.some(d=>String(dateSerial(d))===(current.getElementsByTagNameNS(fluxNS,'v')[0]?.textContent||'')))setExcelDate(daySheet,chosen,2,dateOptions[0]);
  let dvs=daySheet.getElementsByTagNameNS(fluxNS,'dataValidations')[0];
  if(!dvs){dvs=daySheet.createElementNS(fluxNS,'dataValidations');const ext=Array.from(daySheet.documentElement.children).find(x=>['hyperlinks','printOptions','pageMargins','pageSetup','headerFooter','drawing','legacyDrawing','extLst'].includes(x.localName));daySheet.documentElement.insertBefore(dvs,ext||null);}
  for(const v of Array.from(dvs.children))if(v.getAttribute('sqref')==='C5')dvs.removeChild(v);
