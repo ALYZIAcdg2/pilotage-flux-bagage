@@ -190,6 +190,7 @@ function fluxRows({dataset,period,from,to,company}){
  const entries=dates.flatMap(date=>(dataset[date]||[]).filter(r=>!company||String(pick(r,fields[0])).trim().toUpperCase()===company.toUpperCase()).map(r=>({date,r})));
  return {dates,entries};
 }
+ const dateSerial=d=>Math.round((Date.parse(d+'T00:00:00Z')-Date.UTC(1899,11,30))/86400000);
  const setExcelDate=(doc,row,col,d)=>{fluxCell(doc,row,col,d?dateSerial(d):'');const ref=fluxColumnName(col)+row.getAttribute('r');const cell=Array.from(row.children).find(x=>x.getAttribute('r')===ref);if(cell&&d)cell.setAttribute('s','1');};
 export async function exportFluxExcel({dataset,metadata={},period,from,to,company}){
  window.__fluxExportMetadata=metadata;
