@@ -104,6 +104,14 @@ function buildPlan(live,mode){
   }
   if(day.remarks.length)metadataPatch[rk]={...(metadataPatch[rk]||live.metadata?.[rk]||{}),[date]:day.remarks};
  }
+ // Imported airlines must be visible in the KPI, including LO when present in the workbook.
+ const importedCodes=new Set(Object.values(incoming.days).flatMap(day=>day.summary.map(item=>upper(item.airline))));
+ if(importedCodes.size){
+  const removed=Array.isArray(live.metadata?.flux_bags_removed_expected_airlines)?live.metadata.flux_bags_removed_expected_airlines:[];
+  metadataPatch.flux_bags_removed_expected_airlines=removed.filter(code=>!importedCodes.has(upper(code)));
+  const extras=Array.isArray(live.metadata?.flux_bags_extra_airlines)?live.metadata.flux_bags_extra_airlines:[];
+  metadataPatch.flux_bags_extra_airlines=[...new Set([...extras,...importedCodes])];
+ }
  return {updates,metadataPatch,totals};
 }
 function summarize(){
