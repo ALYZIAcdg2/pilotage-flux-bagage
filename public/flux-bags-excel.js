@@ -191,7 +191,6 @@ function fluxRows({dataset,period,from,to,company}){
  return {dates,entries};
 }
  const dateSerial=d=>Math.round((Date.parse(d+'T00:00:00Z')-Date.UTC(1899,11,30))/86400000);
- const setExcelDate=(doc,row,col,d)=>{fluxCell(doc,row,col,d?dateSerial(d):'');const ref=fluxColumnName(col)+row.getAttribute('r');const cell=Array.from(row.children).find(x=>x.getAttribute('r')===ref);if(cell&&d)cell.setAttribute('s',String(dateStyleIndex));};
 export async function exportFluxExcel({dataset,metadata={},period,from,to,company}){
  window.__fluxExportMetadata=metadata;
  const {dates,entries}=fluxRows({dataset,period,from,to,company});
@@ -208,6 +207,7 @@ export async function exportFluxExcel({dataset,metadata={},period,from,to,compan
  const fmt=styles.createElementNS(fluxNS,'numFmt');fmt.setAttribute('numFmtId','180');fmt.setAttribute('formatCode','dd/mm/yyyy');numFmts.appendChild(fmt);numFmts.setAttribute('count',String(numFmts.children.length));
  const xfs=styles.getElementsByTagNameNS(fluxNS,'cellXfs')[0];if(!xfs)throw new Error('Styles Excel manquants');
  const dateStyleIndex=xfs.children.length;const xf=xfs.children[0].cloneNode(true);xf.setAttribute('numFmtId','180');xf.setAttribute('applyNumberFormat','1');xfs.appendChild(xf);xfs.setAttribute('count',String(xfs.children.length));zip.file('xl/styles.xml',serializer.serializeToString(styles));
+ const setExcelDate=(doc,row,col,d)=>{fluxCell(doc,row,col,d?dateSerial(d):'');const ref=fluxColumnName(col)+row.getAttribute('r');const cell=Array.from(row.children).find(x=>x.getAttribute('r')===ref);if(cell&&d)cell.setAttribute('s',String(dateStyleIndex));};
  const dossier=await load('xl/worksheets/sheet2.xml'),base=await load('xl/worksheets/sheet5.xml');
  const stats=new Map(),daily=new Map();
  const blank=()=>({total:0,loaded:0,notLoaded:0,saved:0,cancelled:0,other:0,expected:0});
