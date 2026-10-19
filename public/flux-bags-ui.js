@@ -126,6 +126,7 @@ const expectedRemovedCodes=()=>new Set(Array.isArray(metadata.flux_bags_removed_
 function visibilityCodes(){
  const month=$('date').value.slice(0,7);
  return [...new Set([
+ 'KU',
  ...Object.entries(metadata).filter(([key])=>key.startsWith('flux_bags_expected_')&&key!=='flux_bags_removed_expected_airlines').flatMap(([,vals])=>vals&&!Array.isArray(vals)?Object.keys(vals):[]),
  ...(Array.isArray(metadata.flux_bags_extra_airlines)?metadata.flux_bags_extra_airlines:[]),
  ...Object.values(dataset).flatMap(rows=>(Array.isArray(rows)?rows:[]).map(r=>String(pick(r,...fields[0])).trim().toUpperCase())),
