@@ -62,7 +62,7 @@ function addChart(book,ws,kind,rows,row,col,width=850,height=385){
  const data=pngChart(kind,rows),id=book.addImage({base64:data,extension:'png'});
  ws.addImage(id,{tl:{col,row},ext:{width,height}});
 }
-export async function exportFluxExcel({dataset,metadata={},period,from,to,company}){
+async function legacyExportFluxExcel({dataset,metadata={},period,from,to,company}){
  const ExcelJS=await loadExcelJS(),book=new ExcelJS.Workbook();
  book.creator='ALYZIA CDG2 — PILOTAGE FLUX BAGAGE';book.created=new Date();
  const dates=Object.keys(dataset).filter(d=>period==='day'?d===from:period==='month'?d.slice(0,7)===from.slice(0,7):d>=from&&d<=to).sort();
@@ -147,4 +147,108 @@ export async function exportFluxExcel({dataset,metadata={},period,from,to,compan
  addChart(book,graphs,'kpi',metrics,5,0,1120,390);addChart(book,graphs,'line',dailyRows,27,0,860,390);addChart(book,graphs,'bar',metrics,49,0,860,390);
  const buffer=await book.xlsx.writeBuffer(),name='FLUX_BAGAGES_SUPERVISION_'+(period==='range'?from+'_au_'+to:period==='month'?from.slice(0,7):from)+'_'+(company||'TOUTES')+'.xlsx';
  download(buffer,name);return {name,dossiers:total,compagnies:metrics.length,jours:dates.length};
+}
+
+
+/* Official workbook template export. OOXML editing preserves charts, drawings and existing Excel styles. */
+let __fluxZipPromise;
+function fluxLoadZip(){
+ if(window.JSZip)return Promise.resolve(window.JSZip);
+ if(!__fluxZipPromise)__fluxZipPromise=new Promise((resolve,reject)=>{
+  const s=document.createElement('script');
+  s.src='https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js';
+  s.onload=()=>window.JSZip?resolve(window.JSZip):reject(new Error('JSZip indisponible'));
+  s.onerror=()=>reject(new Error('Chargement JSZip impossible'));
+  document.head.append(s);
+ });
+ return __fluxZipPromise;
+}
+const fluxNS='http://schemas.openxmlformats.org/spreadsheetml/2006/main';
+function fluxCell(doc,row,col,value){
+ const ref=String.fromCharCode(65+col)+row.getAttribute('r');
+ let cell=Array.from(row.children).find(c=>c.localName==='c'&&c.getAttribute('r')===ref);
+ if(!cell){cell=doc.createElementNS(fluxNS,'c');cell.setAttribute('r',ref);
+  const next=Array.from(row.children).find(c=>c.localName==='c'&&fluxColumn(c.getAttribute('r'))>col);
+  row.insertBefore(cell,next||null);
+ }
+ for(const child of Array.from(cell.children))if(['v','is','f'].includes(child.localName))cell.removeChild(child);
+ if(value===null||value===undefined||value===''){cell.removeAttribute('t');return;}
+ if(typeof value==='number'&&Number.isFinite(value)){cell.removeAttribute('t');const v=doc.createElementNS(fluxNS,'v');v.textContent=String(value);cell.appendChild(v);}
+ else{cell.setAttribute('t','inlineStr');const is=doc.createElementNS(fluxNS,'is'),t=doc.createElementNS(fluxNS,'t');t.textContent=String(value);if(/^\s|\s$/.test(String(value)))t.setAttribute('xml:space','preserve');is.appendChild(t);cell.appendChild(is);}
+}
+function fluxColumn(ref){let n=0;for(const c of (ref||'').match(/^[A-Z]+/)?.[0]||'')n=n*26+c.charCodeAt(0)-64;return n-1;}
+function fluxRow(doc,data,rowNo){
+ let row=Array.from(data.children).find(r=>r.localName==='row'&&+r.getAttribute('r')===rowNo);
+ if(!row){row=doc.createElementNS(fluxNS,'row');row.setAttribute('r',rowNo);const next=Array.from(data.children).find(r=>r.localName==='row'&&+r.getAttribute('r')>rowNo);data.insertBefore(row,next||null);}
+ return row;
+}
+function fluxWriteCells(doc,rowNo,values){const data=doc.getElementsByTagNameNS(fluxNS,'sheetData')[0],row=fluxRow(doc,data,rowNo);values.forEach((v,i)=>fluxCell(doc,row,i,v));}
+function fluxDate(s){if(!s)return '';const [y,m,d]=String(s).slice(0,10).split('-');return d+'/'+m+'/'+y;}
+function fluxRows({dataset,period,from,to,company}){
+ const dates=Object.keys(dataset).filter(d=>period==='day'?d===from:period==='month'?d.slice(0,7)===from.slice(0,7):d>=from&&d<=to).sort();
+ const entries=dates.flatMap(date=>(dataset[date]||[]).filter(r=>!company||String(pick(r,fields[0])).trim().toUpperCase()===company.toUpperCase()).map(r=>({date,r})));
+ return {dates,entries};
+}
+export async function exportFluxExcel({dataset,metadata={},period,from,to,company}){
+ const {dates,entries}=fluxRows({dataset,period,from,to,company});
+ if(entries.length>1735)throw new Error('Le modèle officiel contient 1 735 lignes de dossiers maximum. Export annulé pour éviter toute perte de données ('+entries.length+' dossiers).');
+ const JSZip=await fluxLoadZip();
+ const response=await fetch('/ALYZIA_FLUX_BAGAGES.xlsx?v=official-20261019',{cache:'no-store'});
+ if(!response.ok)throw new Error('Modèle officiel introuvable sur le serveur (HTTP '+response.status+')');
+ const zip=await JSZip.loadAsync(await response.arrayBuffer());
+ const parser=new DOMParser(),serializer=new XMLSerializer();
+ const load=async file=>{const raw=await zip.file(file)?.async('string');if(!raw)throw new Error('Feuille du modèle manquante : '+file);const doc=parser.parseFromString(raw,'application/xml');if(doc.getElementsByTagName('parsererror').length)throw new Error('XML invalide : '+file);return doc;};
+ const dossier=await load('xl/worksheets/sheet2.xml'),base=await load('xl/worksheets/sheet5.xml');
+ const stats=new Map(),daily=new Map();
+ const blank=()=>({total:0,loaded:0,notLoaded:0,saved:0,cancelled:0,other:0,expected:0});
+ for(const d of dates)daily.set(d,blank());
+ for(let i=0;i<1735;i++){
+  const e=entries[i];let values=Array(14).fill('');
+  if(e){const r=e.r,cie=String(pick(r,fields[0])).toUpperCase(),tag=tagList(pick(r,fields[3]));
+   values=[fluxDate(e.date),cie,String(pick(r,fields[1])),String(pick(r,fields[2])),tag.join('\n'),tag.length,...fields.slice(4).map(f=>String(pick(r,f)))];
+   const key=statusKey(r);if(!stats.has(cie))stats.set(cie,blank());for(const m of [stats.get(cie),daily.get(e.date)]){m.total++;m[key]++;}
+  }
+  fluxWriteCells(dossier,6+i,values);fluxWriteCells(base,6+i,values);
+ }
+ for(const date of dates){
+  const stored=(metadata['flux_bags_daily_summary_'+date.slice(0,7)]||{})[date]||[];
+  for(const r of stored){const cie=String(r.airline||'').toUpperCase();if(!cie||(company&&company.toUpperCase()!==cie))continue;
+   if(!stats.has(cie))stats.set(cie,blank());stats.get(cie).expected+=num(r.expected);daily.get(date).expected+=num(r.expected);
+  }
+ }
+ zip.file('xl/worksheets/sheet2.xml',serializer.serializeToString(dossier));
+ zip.file('xl/worksheets/sheet5.xml',serializer.serializeToString(base));
+ // Refresh the source dates and expected-baggage inputs used by the existing formula dashboards.
+ const recap=await load('xl/worksheets/sheet1.xml'),synth=await load('xl/worksheets/sheet4.xml');
+ const airlines=[...stats.keys()].sort();
+ if(airlines.length>14)throw new Error('Le modèle officiel permet 14 compagnies maximum ('+airlines.length+' sélectionnées).');
+ for(let i=0;i<14;i++){
+  const row=fluxRow(recap,recap.getElementsByTagNameNS(fluxNS,'sheetData')[0],14+i);
+  fluxCell(recap,row,0,airlines[i]||'');
+  fluxCell(recap,row,3,stats.get(airlines[i])?.expected||0);
+ }
+ for(let i=0;i<30;i++){
+  const d=dates[i],row=fluxRow(synth,synth.getElementsByTagNameNS(fluxNS,'sheetData')[0],6+i);
+  fluxCell(synth,row,0,d?fluxDate(d):'');
+  // Keep all other existing formula cells, only update expected count input if it is not a formula.
+  const expectedCell=Array.from(row.children).find(c=>c.getAttribute('r')==='D'+(6+i));
+  if(expectedCell&&!Array.from(expectedCell.children).some(c=>c.localName==='f'))fluxCell(synth,row,3,d?daily.get(d).expected:0);
+ }
+ zip.file('xl/worksheets/sheet1.xml',serializer.serializeToString(recap));
+ zip.file('xl/worksheets/sheet4.xml',serializer.serializeToString(synth));
+ // Remove old formula caches, so Excel recalculates from the new BASE data.
+ for(const file of ['xl/worksheets/sheet1.xml','xl/worksheets/sheet3.xml','xl/worksheets/sheet4.xml','xl/worksheets/sheet5.xml']){
+  const doc=await load(file);
+  for(const c of Array.from(doc.getElementsByTagNameNS(fluxNS,'c'))){
+   if(Array.from(c.children).some(x=>x.localName==='f'))for(const v of Array.from(c.children).filter(x=>x.localName==='v'))c.removeChild(v);
+  }
+  zip.file(file,serializer.serializeToString(doc));
+ }
+ const wb=await load('xl/workbook.xml'),calc=wb.getElementsByTagNameNS(fluxNS,'calcPr')[0]||wb.createElementNS(fluxNS,'calcPr');
+ calc.setAttribute('fullCalcOnLoad','1');calc.setAttribute('forceFullCalc','1');calc.setAttribute('calcMode','auto');if(!calc.parentNode)wb.documentElement.appendChild(calc);
+ zip.file('xl/workbook.xml',serializer.serializeToString(wb));
+ const buffer=await zip.generateAsync({type:'arraybuffer',compression:'DEFLATE',compressionOptions:{level:6}});
+ const name='FLUX_BAGAGES_SUPERVISION_'+(period==='range'?from+'_au_'+to:period==='month'?from.slice(0,7):from)+'_'+(company||'TOUTES')+'.xlsx';
+ download(buffer,name);
+ return {name,dossiers:entries.length,compagnies:airlines.length,jours:dates.length};
 }
