@@ -50,7 +50,7 @@ function parseWorkbook(workbook){
    if(!values[0]||!values[3]||!(/^[A-Z0-9]{2,3}$/i.test(values[0])))continue;
    const obj=Object.fromEntries(keys.map((k,j)=>[k,values[j]]));obj.cie=upper(obj.cie);obj.flightNumber=flight(obj.flightNumber);obj.tagNumber=tag(obj.tagNumber);obj.fluxStatus=makeStatus(obj.fluxStatus);rows.push(obj);
   }
-  for(let i=11;i<=23;i++){const r=sheet.getRow(i),code=upper(r.getCell(3).text);if(!/^[A-Z0-9]{2,3}$/.test(code))continue;const obj={airline:code};summaryKeys.forEach((k,j)=>{const v=r.getCell(j+4).value;obj[k]=typeof v==='number'?v:Number(clean(r.getCell(j+4).text).replace(',','.'))||0;});summary.push(obj);}
+  for(let i=11;i<=26;i++){const r=sheet.getRow(i),code=upper(r.getCell(3).text);if(!/^[A-Z0-9]{2,3}$/.test(code))continue;const obj={airline:code};summaryKeys.forEach((k,j)=>{const v=r.getCell(j+4).value;obj[k]=typeof v==='number'?v:Number(clean(r.getCell(j+4).text).replace(',','.'))||0;});summary.push(obj);}
   const remark=clean(sheet.getCell('J8').text);if(remark&&remark.toUpperCase()!=='REMARQUES :')remarks.push(remark);
   days[date]={records:rows,summary,remarks};total+=rows.length;
  }
