@@ -209,12 +209,14 @@ function renderCompanyDetail(rows){
  '<h3>Dossiers '+esc(r.airline)+' · '+fmt(dossiers.length)+'</h3><div class="summary-dossiers-wrap"><table class="summary-dossiers"><thead><tr><th>Date</th>'+cols.map(([label])=>'<th>'+label+'</th>').join('')+'</tr></thead><tbody>'+ (dossiers.map(({date,row})=>'<tr><td>'+esc(displayDate(date))+'</td>'+cols.map(([,keys])=>'<td>'+esc(pick(row,...keys))+'</td>').join('')+'</tr>').join('')||'<tr><td colspan="7">Aucun dossier individuel sur la période sélectionnée.</td></tr>')+'</tbody></table></div></div>';
  $('summaryCompanyBack').onclick=()=>{selectedSummaryCompany='';renderCompanyDetail(rows);};
 }
+function duplicateBaggageCount(dates,company){let total=0;for(const date of dates){const seen=new Set();for(const r of dataset[date]||[]){const code=String(pick(r,...fields[0])).trim().toUpperCase();if(!code||!airlineVisible(code)||(company&&company!==code))continue;const tags=splitBagTags(pick(r,...fields[3]));for(const raw of tags){const tag=String(raw).toUpperCase().replace(/[\\s-]/g,'');if(!tag)continue;const key=code+'|'+tag;if(seen.has(key))total++;else seen.add(key);}}}return total;}
 function renderSummary(){
  syncModalDate('summary');
  const period=$('summaryPeriod').value; $('summaryTo').disabled=period!=='range';
  const s=filteredSummary();
  const totals=Object.fromEntries(summaryKeys.map(k=>[k,s.reduce((n,r)=>n+r[k],0)]));
- $('summaryKpis').innerHTML=[['NOMBRE DE BAGAGES ATTENDUS',totals.expected],['À TRAITER (bagages)',totals.toProcess],['SAUVÉS (après action)',totals.saved],['CHARGÉS (après action)',totals.loaded],['NON CHARGÉS (non récupérés)',totals.notLoaded],['ANNULÉS (passager annulé)',totals.cancelled]].map(([label,n],i)=>'<div class="kpi"><label><span class="kpi-icon">'+kpiIcons[i]+'</span>'+label+'</label><strong>'+n.toLocaleString('fr-FR')+'</strong>'+'</div>').join('');
+ const duplicates=duplicateBaggageCount(selectedDates(period,$('summaryFrom').value,$('summaryTo').value),$('summaryAirline').value);
+ $('summaryKpis').innerHTML=[['NOMBRE DE BAGAGES ATTENDUS',totals.expected],['À TRAITER (bagages)',totals.toProcess],['SAUVÉS (après action)',totals.saved],['CHARGÉS (après action)',totals.loaded],['NON CHARGÉS (non récupérés)',totals.notLoaded],['ANNULÉS (passager annulé)',totals.cancelled],['BAGAGES EN DOUBLE (TAG répété)',duplicates]].map(([label,n],i)=>'<div class="kpi"><label><span class="kpi-icon">'+kpiIcons[i]+'</span>'+label+'</label><strong>'+n.toLocaleString('fr-FR')+'</strong>'+'</div>').join('');
  renderCompanyCards(s);
  $('summaryScope').textContent=period==='month'?'Mois : '+$('summaryFrom').value.slice(0,7):period==='year'?'Année : '+$('summaryFrom').value.slice(0,4):period==='day'?'Journée : '+displayDate($('summaryFrom').value):'Du '+displayDate($('summaryFrom').value)+' au '+displayDate($('summaryTo').value);
 }
