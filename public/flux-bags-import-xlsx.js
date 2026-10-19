@@ -68,14 +68,53 @@ function missingRows(date,records,existingRows){
  }
  return missing;
 }
+
+function updateDay(date,oldRows,newRows){
+ const buckets=new Map();
+ for(const r of oldRows){const key=identity(date,r);if(!buckets.has(key))buckets.set(key,[]);buckets.get(key).push(r);}
+ const used=new Map(),result=[];let added=0,changed=0;
+ for(const row of newRows){
+  const key=identity(date,row),index=used.get(key)||0,old=buckets.get(key)?.[index];
+  used.set(key,index+1);
+  if(old){const next={...old,...row};if(rowSignature(next)!==rowSignature(old))changed++;result.push(next);}
+  else{result.push(row);added++;}
+ }
+ // Preserve unmentioned existing records, including legitimate repeated tags.
+ for(const [key,rows] of buckets)result.push(...rows.slice(used.get(key)||0));
+ return {records:result,added,changed,removed:0};
+}
+function buildPlan(live,mode){
+ const updates=[],metadataPatch={},totals={added:0,changed:0,removed:0,days:0,expected:0};
+ for(const [date,day] of Object.entries(incoming.days)){
+  const old=live.data?.[date]||[],next=mode==='replace'
+   ?{records:day.records,added:Math.max(0,day.records.length-old.length),changed:0,removed:Math.max(0,old.length-day.records.length)}
+   :updateDay(date,old,day.records);
+  // A replace always writes the selected day; update writes only when its contents change.
+  if(mode==='replace'||JSON.stringify(next.records)!==JSON.stringify(old))updates.push({date,records:next.records});
+  totals.added+=next.added;totals.changed+=next.changed;totals.removed+=next.removed;totals.days++;
+  const month=date.slice(0,7),sk='flux_bags_daily_summary_'+month,rk='flux_bags_remarks_'+month,ek='flux_bags_expected_daily_'+date;
+  if(day.summary.length){
+   metadataPatch[sk]={...(metadataPatch[sk]||live.metadata?.[sk]||{}),[date]:day.summary};
+   const expected={...(live.metadata?.[ek]||{})};
+   for(const item of day.summary){
+    const code=upper(item.airline),value=Number(item.expected);
+    if(code&&Number.isSafeInteger(value)&&value>=0){expected[code]=value;totals.expected++;}
+   }
+   metadataPatch[ek]=expected;
+  }
+  if(day.remarks.length)metadataPatch[rk]={...(metadataPatch[rk]||live.metadata?.[rk]||{}),[date]:day.remarks};
+ }
+ return {updates,metadataPatch,totals};
+}
 function summarize(){
  if(!incoming||!existing)return;
- let missing=0;
- for(const [date,day] of Object.entries(incoming.days))missing+=missingRows(date,day.records,existing.data?.[date]||[]).length;
- incoming.missing=missing;
- $('preview').innerHTML='<b>'+Object.keys(incoming.days).length+' journées</b> · '+incoming.total+' lignes · <b>'+missing+' lignes restant à importer</b> · '+(incoming.total-missing)+' lignes déjà présentes.';
- $('conflicts').innerHTML='<p>Les lignes Excel sont conservées individuellement, y compris les doublons de date, compagnie et tag. Les lignes déjà importées à l’identique ne seront pas réajoutées.</p>';
- $('apply').disabled=missing===0;
+ const mode=$('mode').value,plan=buildPlan(existing,mode),t=plan.totals;
+ $('preview').innerHTML='<b>'+t.days+' journées</b> · '+incoming.total+' lignes dans le fichier · <b>'+t.added+' ajouts</b> · <b>'+t.changed+' modifications</b> · <b>'+t.removed+' suppressions estimées</b> · '+t.expected+' valeurs de bagages attendus.';
+ $('conflicts').innerHTML='<p>'+ (mode==='replace'
+  ?'<strong>REMPLACER :</strong> les dossiers de chaque journée importée seront remplacés, y compris les dossiers absents du fichier.'
+  :'<strong>METTRE À JOUR :</strong> les dossiers sont rapprochés par date, compagnie et TAG ; les autres dossiers restent conservés.')+
+  ' Les bagages attendus des récapitulatifs Excel seront enregistrés par date et compagnie.</p>';
+ $('apply').disabled=false;
 }
 async function parseFile(file){
  $('apply').disabled=true;$('status').textContent='Lecture et comparaison…';
@@ -86,25 +125,32 @@ async function parseFile(file){
  const res=await fetch('/api/data',{cache:'no-store'});if(!res.ok)throw Error('Chargement de la base TEST impossible : '+res.status);
  existing=await res.json();summarize();$('status').textContent='Prévisualisation prête. Aucune donnée modifiée.';
 }
+$('mode').onchange=()=>{if(incoming&&existing)summarize();};
 $('file').onchange=async()=>{try{await parseFile($('file').files[0]);}catch(e){incoming=null;$('apply').disabled=true;$('status').textContent='Erreur : '+e.message;}};
 $('apply').onclick=async()=>{
  if(!incoming||!existing)return;
- if(!confirm('Importer uniquement les lignes manquantes sur TEST, en conservant tous les doublons Excel ?'))return;
+ const mode=$('mode').value,verb=mode==='replace'?'REMPLACER':'METTRE À JOUR';
+ if(!confirm(verb+' les journées importées sur TEST ? Les bagages attendus présents dans le fichier seront aussi mis à jour.'))return;
  $('apply').disabled=true;
  try{
   const fresh=await fetch('/api/data',{cache:'no-store'});if(!fresh.ok)throw Error('Vérification des données : '+fresh.status);
   const live=await fresh.json();
-  for(const date of Object.keys(incoming.days))if(JSON.stringify(live.data?.[date]||[])!==JSON.stringify(existing.data?.[date]||[]))throw Error('La journée '+date+' a changé depuis la prévisualisation. Rechargez le fichier.');
-  const updates=[];let added=0;
-  for(const [date,day] of Object.entries(incoming.days)){
-   const old=live.data?.[date]||[],missing=missingRows(date,day.records,old);
-   if(missing.length){updates.push({date,records:[...old,...missing]});added+=missing.length;}
+  for(const date of Object.keys(incoming.days)){
+   if(JSON.stringify(live.data?.[date]||[])!==JSON.stringify(existing.data?.[date]||[]))throw Error('La journée '+date+' a changé depuis la prévisualisation. Rechargez le fichier.');
+   const month=date.slice(0,7);
+   for(const key of ['flux_bags_expected_daily_'+date,'flux_bags_daily_summary_'+month,'flux_bags_remarks_'+month])
+    if(JSON.stringify(live.metadata?.[key]||{})!==JSON.stringify(existing.metadata?.[key]||{}))throw Error('Les KPI ont changé depuis la prévisualisation. Rechargez le fichier.');
   }
-  if(!updates.length){$('status').textContent='Toutes les '+incoming.total+' lignes Excel sont déjà présentes. Aucune modification.';return;}
-  // Add missing daily summaries/remarks, but never overwrite existing KPI or remarks.
-  const metadataPatch={};for(const [date,day] of Object.entries(incoming.days)){const month=date.slice(0,7),sk='flux_bags_daily_summary_'+month,rk='flux_bags_remarks_'+month;const oldSummary=live.metadata?.[sk]||{},oldRemarks=live.metadata?.[rk]||{};if(!Object.prototype.hasOwnProperty.call(oldSummary,date)&&day.summary.length){metadataPatch[sk]={...(metadataPatch[sk]||oldSummary),[date]:day.summary};}if(!Object.prototype.hasOwnProperty.call(oldRemarks,date)&&day.remarks.length){metadataPatch[rk]={...(metadataPatch[rk]||oldRemarks),[date]:day.remarks};}}
-  for(let i=0;i<updates.length;i+=2){const slice=updates.slice(i,i+2);const res=await fetch('/api/days',{method:'PUT',headers:{'content-type':'application/json'},body:JSON.stringify({days:slice,metadata:i===0?metadataPatch:{}})});if(!res.ok)throw Error('Écriture API '+res.status+' : '+(await res.text()).slice(0,180));$('status').textContent='Journées enregistrées : '+Math.min(i+2,updates.length)+' / '+updates.length;}
-  $('status').textContent='Import terminé : '+added+' lignes ajoutées, 0 dossier existant modifié, 0 doublon Excel supprimé. Les récapitulatifs existants ont été préservés ; les récapitulatifs manquants ont été ajoutés.';
+  const {updates,metadataPatch,totals}=buildPlan(live,mode);
+  // Include metadata in the first request even if no dossier was changed.
+  const batches=[];for(let i=0;i<updates.length;i+=2)batches.push(updates.slice(i,i+2));
+  if(!batches.length)batches.push([]);
+  for(let i=0;i<batches.length;i++){
+   const res=await fetch('/api/days',{method:'PUT',headers:{'content-type':'application/json'},body:JSON.stringify({days:batches[i],metadata:i===0?metadataPatch:{}})});
+   if(!res.ok)throw Error('Écriture API '+res.status+' : '+(await res.text()).slice(0,180));
+   $('status').textContent='Enregistrement '+(i+1)+' / '+batches.length+'…';
+  }
+  $('status').textContent='Import '+verb+' terminé : '+totals.added+' ajouts, '+totals.changed+' modifications, '+totals.removed+' suppressions estimées, '+totals.expected+' valeurs de bagages attendus mises à jour. Rechargez le tableau pour voir les résultats.';
   existing=null;incoming=null;$('apply').disabled=true;
  }catch(e){$('status').textContent='IMPORT INTERROMPU : '+e.message+' (certaines journées ont pu être enregistrées). Rechargez le fichier avant de recommencer.';}finally{if(incoming)$('apply').disabled=false;}
 };
