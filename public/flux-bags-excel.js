@@ -236,7 +236,7 @@ export async function exportFluxExcel({dataset,metadata={},period,from,to,compan
  }
  // Restore the date dropdown at C5, backed by a list of dates in hidden helper column AA.
  const dateOptions=dates.slice(0,30);
- for(let i=0;i<30;i++)fluxWriteCells(daySheet,5+i,Array(26).fill(null).concat(dateOptions[i]?fluxDate(dateOptions[i]):''));
+ for(let i=0;i<30;i++){const dr=fluxRow(daySheet,daySheet.getElementsByTagNameNS(fluxNS,'sheetData')[0],5+i);fluxCell(daySheet,dr,26,dateOptions[i]?fluxDate(dateOptions[i]):'');}
  const data=daySheet.getElementsByTagNameNS(fluxNS,'sheetData')[0],chosen=fluxRow(daySheet,data,5);
  const current=Array.from(chosen.children).find(c=>c.getAttribute('r')==='C5');
  if(!current||!dateOptions.some(d=>fluxDate(d)===(current.getElementsByTagNameNS(fluxNS,'t')[0]?.textContent||'')))fluxCell(daySheet,chosen,2,dateOptions.length?fluxDate(dateOptions[0]):'');
