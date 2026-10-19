@@ -207,6 +207,7 @@ export async function exportFluxExcel({dataset,metadata={},period,from,to,compan
   const e=entries[i];let values=Array(14).fill('');
   if(e){const r=e.r,cie=String(pick(r,fields[0])).toUpperCase(),tag=tagList(pick(r,fields[3]));
    values=[fluxDate(e.date),cie,(cie+String(pick(r,fields[1])).trim().replace(new RegExp('^'+cie,'i'),'')),String(pick(r,fields[2])),tag.join('\n'),tag.length,...fields.slice(4).map(f=>String(pick(r,f)))];
+   values[12]=status(r)==='CHARGE'?'CHARGÉ':status(r)==='NON CHARGE'?'NON CHARGÉ':status(r)==='SAUVE'?'SAUVÉ':status(r)==='ANNULE'?'ANNULÉ':String(pick(r,fields[10]));
    const key=statusKey(r);if(!stats.has(cie))stats.set(cie,blank());for(const m of [stats.get(cie),daily.get(e.date)]){m.total++;m[key]++;}
   }
   fluxWriteCells(dossier,6+i,values);fluxWriteCells(base,6+i,values);
@@ -228,17 +229,17 @@ export async function exportFluxExcel({dataset,metadata={},period,from,to,compan
   fluxCell(recap,row,0,airlines[i]||'');
   fluxCell(recap,row,3,stats.get(airlines[i])?.expected||0);
  }
- for(let i=0;i<30;i++){
+ for(let i=0;i<31;i++){
   const d=dates[i],row=fluxRow(synth,synth.getElementsByTagNameNS(fluxNS,'sheetData')[0],6+i);
-   for(let k=8;k<22;k++)fluxCell(synth,row,k,'');
+   for(let k=8;k<22;k++)fluxCell(synth,row,k,0);
   fluxCell(synth,row,0,d?fluxDate(d):'');
   // Keep all other existing formula cells, only update expected count input if it is not a formula.
   const expectedCell=Array.from(row.children).find(c=>c.getAttribute('r')==='D'+(6+i));
   if(expectedCell&&!Array.from(expectedCell.children).some(c=>c.localName==='f'))fluxCell(synth,row,3,d?daily.get(d).expected:0);
  }
  // Restore the date dropdown at C5, backed by a list of dates in hidden helper column AA.
- const dateOptions=dates.slice(0,30);
- for(let i=0;i<30;i++){const dr=fluxRow(daySheet,daySheet.getElementsByTagNameNS(fluxNS,'sheetData')[0],5+i);fluxCell(daySheet,dr,26,dateOptions[i]?fluxDate(dateOptions[i]):'');}
+ const dateOptions=dates.slice(0,31);
+ for(let i=0;i<31;i++){const dr=fluxRow(daySheet,daySheet.getElementsByTagNameNS(fluxNS,'sheetData')[0],5+i);fluxCell(daySheet,dr,26,dateOptions[i]?fluxDate(dateOptions[i]):'');}
  const data=daySheet.getElementsByTagNameNS(fluxNS,'sheetData')[0],chosen=fluxRow(daySheet,data,5);
  const current=Array.from(chosen.children).find(c=>c.getAttribute('r')==='C5');
  if(!current||!dateOptions.some(d=>fluxDate(d)===(current.getElementsByTagNameNS(fluxNS,'t')[0]?.textContent||'')))fluxCell(daySheet,chosen,2,dateOptions.length?fluxDate(dateOptions[0]):'');
