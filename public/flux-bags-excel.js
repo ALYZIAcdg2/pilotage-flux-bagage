@@ -65,7 +65,7 @@ function addChart(book,ws,kind,rows,row,col,width=850,height=385){
 async function legacyExportFluxExcel({dataset,metadata={},period,from,to,company}){
  const ExcelJS=await loadExcelJS(),book=new ExcelJS.Workbook();
  book.creator='ALYZIA CDG2 — PILOTAGE FLUX BAGAGE';book.created=new Date();
- const dates=Object.keys(dataset).filter(d=>period==='day'?d===from:period==='month'?d.slice(0,7)===from.slice(0,7):d>=from&&d<=to).sort();
+ const dates=[...new Set([...Object.keys(dataset),...Object.keys(window.__fluxExportMetadata||{}).filter(k=>/^flux_bags_expected_daily_\d{4}-\d{2}-\d{2}$/.test(k)).map(k=>k.slice(25))])].filter(d=>period==='day'?d===from:period==='month'?d.slice(0,7)===from.slice(0,7):d>=from&&d<=to).sort();
  const selected=dates.flatMap(date=>(dataset[date]||[]).filter(r=>!company||String(pick(r,fields[0])).toUpperCase()===company).map(r=>({date,r})));
  const grouped=new Map(),daily=new Map(),anomalies=new Map(),locations=new Map();
  const blank=()=>({expected:0,toProcess:0,saved:0,loaded:0,notLoaded:0,cancelled:0,other:0,baggage:0});
@@ -191,6 +191,7 @@ function fluxRows({dataset,period,from,to,company}){
  return {dates,entries};
 }
 export async function exportFluxExcel({dataset,metadata={},period,from,to,company}){
+ window.__fluxExportMetadata=metadata;
  const {dates,entries}=fluxRows({dataset,period,from,to,company});
  if(entries.length>1735)throw new Error('Le modèle officiel contient 1 735 lignes de dossiers maximum. Export annulé pour éviter toute perte de données ('+entries.length+' dossiers).');
  const JSZip=await fluxLoadZip();
@@ -212,37 +213,64 @@ export async function exportFluxExcel({dataset,metadata={},period,from,to,compan
   }
   fluxWriteCells(dossier,6+i,values);fluxWriteCells(base,6+i,values);
  }
+ // Expected baggage counts are independent user-entered KPI values, not dossier counts.
+ const expectedByDate=new Map(),expectedByAirline=new Map();
+ const allCodes=new Set([...stats.keys()]);
  for(const date of dates){
-  const stored=(metadata['flux_bags_daily_summary_'+date.slice(0,7)]||{})[date]||[];
-  for(const r of stored){const cie=String(r.airline||'').toUpperCase();if(!cie||(company&&company.toUpperCase()!==cie))continue;
-   if(!stats.has(cie))stats.set(cie,blank());stats.get(cie).expected+=num(r.expected);daily.get(date).expected+=num(r.expected);
+  const month=date.slice(0,7),dailyValues=metadata['flux_bags_expected_daily_'+date];
+  const dayMap=new Map();
+  if(dailyValues&&typeof dailyValues==='object')for(const [raw,v] of Object.entries(dailyValues)){
+   const code=raw.trim().toUpperCase();if((!company||company.toUpperCase()===code)&&Number.isSafeInteger(v)&&v>=0){dayMap.set(code,v);allCodes.add(code);}
   }
+  expectedByDate.set(date,dayMap);
  }
+ // Monthly values are a legacy fallback only when no daily inputs exist for that month.
+ const months=[...new Set(dates.map(d=>d.slice(0,7)))];
+ for(const month of months){
+  const monthDates=dates.filter(d=>d.startsWith(month));
+  const hasDaily=Object.keys(metadata).some(k=>k.startsWith('flux_bags_expected_daily_'+month+'-'));
+  if(!hasDaily){
+   const legacy=metadata['flux_bags_expected_'+month]||{};
+   for(const [raw,v] of Object.entries(legacy)){
+    const code=raw.trim().toUpperCase();if((!company||company.toUpperCase()===code)&&Number.isSafeInteger(v)&&v>=0){allCodes.add(code);expectedByAirline.set(code,(expectedByAirline.get(code)||0)+v);}
+   }
+  }else for(const date of monthDates)for(const [code,v] of expectedByDate.get(date))expectedByAirline.set(code,(expectedByAirline.get(code)||0)+v);
+ }
+ for(const [code,v] of expectedByAirline){if(!stats.has(code))stats.set(code,blank());stats.get(code).expected=v;}
+ const dateSerial=d=>Math.round((Date.parse(d+'T00:00:00Z')-Date.UTC(1899,11,30))/86400000);
+ const sharedRaw=await zip.file('xl/sharedStrings.xml')?.async('string');
+ const sharedDoc=sharedRaw?parser.parseFromString(sharedRaw,'application/xml'):null;
+ const shared=sharedDoc?Array.from(sharedDoc.getElementsByTagNameNS(fluxNS,'si')).map(si=>Array.from(si.getElementsByTagNameNS(fluxNS,'t')).map(t=>t.textContent).join('')):[];
+ const cellText=(doc,ref)=>{const cell=Array.from(doc.getElementsByTagNameNS(fluxNS,'c')).find(x=>x.getAttribute('r')===ref);if(!cell)return '';const v=cell.getElementsByTagNameNS(fluxNS,'v')[0]?.textContent||'';return cell.getAttribute('t')==='s'?(shared[Number(v)]||''):cell.getElementsByTagNameNS(fluxNS,'t')[0]?.textContent||v;};
  zip.file('xl/worksheets/sheet2.xml',serializer.serializeToString(dossier));
  zip.file('xl/worksheets/sheet5.xml',serializer.serializeToString(base));
  // Refresh the source dates and expected-baggage inputs used by the existing formula dashboards.
  const recap=await load('xl/worksheets/sheet1.xml'),synth=await load('xl/worksheets/sheet4.xml'),daySheet=await load('xl/worksheets/sheet3.xml');
- const airlines=[...stats.keys()].sort();
+ const airlines=[...allCodes].sort();
  if(airlines.length>14)throw new Error('Le modèle officiel permet 14 compagnies maximum ('+airlines.length+' sélectionnées).');
  for(let i=0;i<14;i++){
   const row=fluxRow(recap,recap.getElementsByTagNameNS(fluxNS,'sheetData')[0],14+i);
   fluxCell(recap,row,0,airlines[i]||'');
-  fluxCell(recap,row,3,stats.get(airlines[i])?.expected||0);
+  fluxCell(recap,row,3,expectedByAirline.get(airlines[i])||0);
  }
  for(let i=0;i<31;i++){
   const d=dates[i],row=fluxRow(synth,synth.getElementsByTagNameNS(fluxNS,'sheetData')[0],6+i);
    for(let k=8;k<22;k++)fluxCell(synth,row,k,0);
-  fluxCell(synth,row,0,d?fluxDate(d):'');
+  fluxCell(synth,row,0,d?dateSerial(d):'');
+  for(let col=8;col<22;col++){
+   const code=cellText(synth,fluxColumnName(col)+'5').trim().toUpperCase();
+   fluxCell(synth,row,col,d?(expectedByDate.get(d)?.get(code)||0):0);
+  }
   // Keep all other existing formula cells, only update expected count input if it is not a formula.
   const expectedCell=Array.from(row.children).find(c=>c.getAttribute('r')==='D'+(6+i));
-  if(expectedCell&&!Array.from(expectedCell.children).some(c=>c.localName==='f'))fluxCell(synth,row,3,d?daily.get(d).expected:0);
+  if(expectedCell&&!Array.from(expectedCell.children).some(c=>c.localName==='f'))fluxCell(synth,row,3,d?Array.from(expectedByDate.get(d)?.values()||[]).reduce((a,b)=>a+b,0):0);
  }
  // Restore the date dropdown at C5, backed by a list of dates in hidden helper column AA.
  const dateOptions=dates.slice(0,31);
- for(let i=0;i<31;i++){const dr=fluxRow(daySheet,daySheet.getElementsByTagNameNS(fluxNS,'sheetData')[0],5+i);fluxCell(daySheet,dr,26,dateOptions[i]?fluxDate(dateOptions[i]):'');}
+ for(let i=0;i<31;i++){const dr=fluxRow(daySheet,daySheet.getElementsByTagNameNS(fluxNS,'sheetData')[0],5+i);fluxCell(daySheet,dr,26,dateOptions[i]?dateSerial(dateOptions[i]):'');}
  const data=daySheet.getElementsByTagNameNS(fluxNS,'sheetData')[0],chosen=fluxRow(daySheet,data,5);
  const current=Array.from(chosen.children).find(c=>c.getAttribute('r')==='C5');
- if(!current||!dateOptions.some(d=>fluxDate(d)===(current.getElementsByTagNameNS(fluxNS,'t')[0]?.textContent||'')))fluxCell(daySheet,chosen,2,dateOptions.length?fluxDate(dateOptions[0]):'');
+ if(!current||!dateOptions.some(d=>String(dateSerial(d))===(current.getElementsByTagNameNS(fluxNS,'v')[0]?.textContent||'')))fluxCell(daySheet,chosen,2,dateOptions.length?dateSerial(dateOptions[0]):'');
  let dvs=daySheet.getElementsByTagNameNS(fluxNS,'dataValidations')[0];
  if(!dvs){dvs=daySheet.createElementNS(fluxNS,'dataValidations');const ext=Array.from(daySheet.documentElement.children).find(x=>['hyperlinks','printOptions','pageMargins','pageSetup','headerFooter','drawing','legacyDrawing','extLst'].includes(x.localName));daySheet.documentElement.insertBefore(dvs,ext||null);}
  for(const v of Array.from(dvs.children))if(v.getAttribute('sqref')==='C5')dvs.removeChild(v);
