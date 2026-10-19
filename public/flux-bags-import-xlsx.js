@@ -114,6 +114,7 @@ function buildPlan(live,mode){
  }
  return {updates,metadataPatch,totals};
 }
+function confirmImport(mode,totals){return new Promise(resolve=>{const dialog=$('importConfirmDialog'),cancel=$('importConfirmCancel'),accept=$('importConfirmAccept');$('importConfirmTitle').textContent=mode==='replace'?'REMPLACER LES JOURNÉES':'METTRE À JOUR LES JOURNÉES';$('importConfirmBody').innerHTML='<p>Vous allez '+(mode==='replace'?'remplacer les dossiers des journées sélectionnées. Les dossiers absents du fichier seront supprimés.':'mettre à jour les dossiers correspondants et ajouter les nouveaux, sans supprimer les autres.')+'</p><div class="import-stats"><div class="import-stat">Journées<strong>'+totals.days+'</strong></div><div class="import-stat">Ajouts<strong>'+totals.added+'</strong></div><div class="import-stat">Modifications<strong>'+totals.changed+'</strong></div><div class="import-stat">Bagages attendus<strong>'+totals.expected+' valeurs</strong></div></div>'+(mode==='replace'?'<div class="import-alert">Attention : les journées importées remplaceront les données actuellement enregistrées.</div>':'')+'<p>Environnement : <strong>TEST uniquement</strong>.</p>';let done=false;const cleanup=()=>{cancel.removeEventListener('click',no);accept.removeEventListener('click',yes);dialog.removeEventListener('close',closed);};const finish=v=>{if(done)return;done=true;cleanup();dialog.close();resolve(v);};const no=()=>finish(false),yes=()=>finish(true),closed=()=>{if(!done){done=true;cleanup();resolve(false);}};cancel.addEventListener('click',no);accept.addEventListener('click',yes);dialog.addEventListener('close',closed);dialog.showModal();cancel.focus();});}
 function summarize(){
  if(!incoming||!existing)return;
  const mode=$('mode').value,plan=buildPlan(existing,mode),t=plan.totals;
@@ -138,7 +139,7 @@ $('file').onchange=async()=>{try{await parseFile($('file').files[0]);}catch(e){i
 $('apply').onclick=async()=>{
  if(!incoming||!existing)return;
  const mode=$('mode').value,verb=mode==='replace'?'REMPLACER':'METTRE À JOUR';
- if(!confirm(verb+' les journées importées sur TEST ? Les bagages attendus présents dans le fichier seront aussi mis à jour.'))return;
+ if(!await confirmImport(mode,buildPlan(existing,mode).totals))return;
  $('apply').disabled=true;
  try{
   const fresh=await fetch('/api/data',{cache:'no-store'});if(!fresh.ok)throw Error('Vérification des données : '+fresh.status);
