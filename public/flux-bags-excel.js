@@ -165,7 +165,7 @@ function fluxLoadZip(){
 }
 const fluxNS='http://schemas.openxmlformats.org/spreadsheetml/2006/main';
 function fluxCell(doc,row,col,value){
- const ref=String.fromCharCode(65+col)+row.getAttribute('r');
+ const ref=fluxColumnName(col)+row.getAttribute('r');
  let cell=Array.from(row.children).find(c=>c.localName==='c'&&c.getAttribute('r')===ref);
  if(!cell){cell=doc.createElementNS(fluxNS,'c');cell.setAttribute('r',ref);
   const next=Array.from(row.children).find(c=>c.localName==='c'&&fluxColumn(c.getAttribute('r'))>col);
@@ -176,6 +176,7 @@ function fluxCell(doc,row,col,value){
  if(typeof value==='number'&&Number.isFinite(value)){cell.removeAttribute('t');const v=doc.createElementNS(fluxNS,'v');v.textContent=String(value);cell.appendChild(v);}
  else{cell.setAttribute('t','inlineStr');const is=doc.createElementNS(fluxNS,'is'),t=doc.createElementNS(fluxNS,'t');t.textContent=String(value);if(/^\s|\s$/.test(String(value)))t.setAttribute('xml:space','preserve');is.appendChild(t);cell.appendChild(is);}
 }
+function fluxColumnName(index){let n=index+1,s='';while(n>0){n--;s=String.fromCharCode(65+n%26)+s;n=Math.floor(n/26);}return s;}
 function fluxColumn(ref){let n=0;for(const c of (ref||'').match(/^[A-Z]+/)?.[0]||'')n=n*26+c.charCodeAt(0)-64;return n-1;}
 function fluxRow(doc,data,rowNo){
  let row=Array.from(data.children).find(r=>r.localName==='row'&&+r.getAttribute('r')===rowNo);
@@ -229,6 +230,7 @@ export async function exportFluxExcel({dataset,metadata={},period,from,to,compan
  }
  for(let i=0;i<30;i++){
   const d=dates[i],row=fluxRow(synth,synth.getElementsByTagNameNS(fluxNS,'sheetData')[0],6+i);
+   for(let k=8;k<22;k++)fluxCell(synth,row,k,'');
   fluxCell(synth,row,0,d?fluxDate(d):'');
   // Keep all other existing formula cells, only update expected count input if it is not a formula.
   const expectedCell=Array.from(row.children).find(c=>c.getAttribute('r')==='D'+(6+i));
