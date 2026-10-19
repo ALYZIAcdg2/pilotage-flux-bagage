@@ -184,13 +184,13 @@ function fluxRow(doc,data,rowNo){
  return row;
 }
 function fluxWriteCells(doc,rowNo,values){const data=doc.getElementsByTagNameNS(fluxNS,'sheetData')[0],row=fluxRow(doc,data,rowNo);values.forEach((v,i)=>fluxCell(doc,row,i,v));}
+function dateSerial(d){return Math.round((Date.parse(d+'T00:00:00Z')-Date.UTC(1899,11,30))/86400000);}
 function fluxDate(s){if(!s)return '';const [y,m,d]=String(s).slice(0,10).split('-');return d+'/'+m+'/'+y;}
 function fluxRows({dataset,period,from,to,company}){
  const dates=Object.keys(dataset).filter(d=>period==='day'?d===from:period==='month'?d.slice(0,7)===from.slice(0,7):d>=from&&d<=to).sort();
  const entries=dates.flatMap(date=>(dataset[date]||[]).filter(r=>!company||String(pick(r,fields[0])).trim().toUpperCase()===company.toUpperCase()).map(r=>({date,r})));
  return {dates,entries};
 }
- const dateSerial=d=>Math.round((Date.parse(d+'T00:00:00Z')-Date.UTC(1899,11,30))/86400000);
 export async function exportFluxExcel({dataset,metadata={},period,from,to,company}){
  window.__fluxExportMetadata=metadata;
  const {dates,entries}=fluxRows({dataset,period,from,to,company});
@@ -246,7 +246,6 @@ export async function exportFluxExcel({dataset,metadata={},period,from,to,compan
   }else for(const date of monthDates)for(const [code,v] of expectedByDate.get(date))expectedByAirline.set(code,(expectedByAirline.get(code)||0)+v);
  }
  for(const [code,v] of expectedByAirline){if(!stats.has(code))stats.set(code,blank());stats.get(code).expected=v;}
- const dateSerial=d=>Math.round((Date.parse(d+'T00:00:00Z')-Date.UTC(1899,11,30))/86400000);
  const sharedRaw=await zip.file('xl/sharedStrings.xml')?.async('string');
  const sharedDoc=sharedRaw?parser.parseFromString(sharedRaw,'application/xml'):null;
  const shared=sharedDoc?Array.from(sharedDoc.getElementsByTagNameNS(fluxNS,'si')).map(si=>Array.from(si.getElementsByTagNameNS(fluxNS,'t')).map(t=>t.textContent).join('')):[];
