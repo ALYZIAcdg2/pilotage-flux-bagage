@@ -187,7 +187,7 @@ function fluxWriteCells(doc,rowNo,values){const data=doc.getElementsByTagNameNS(
 function dateSerial(d){return Math.round((Date.parse(d+'T00:00:00Z')-Date.UTC(1899,11,30))/86400000);}
 function fluxDate(s){if(!s)return '';const [y,m,d]=String(s).slice(0,10).split('-');return d+'/'+m+'/'+y;}
 function fluxRows({dataset,period,from,to,company}){
- const dates=Object.keys(dataset).filter(d=>period==='day'?d===from:period==='month'?d.slice(0,7)===from.slice(0,7):d>=from&&d<=to).sort();
+ const dates=[...new Set([...Object.keys(dataset),...Object.keys(window.__fluxExportMetadata||{}).filter(k=>/^flux_bags_expected_daily_\d{4}-\d{2}-\d{2}$/.test(k)).map(k=>k.slice('flux_bags_expected_daily_'.length))])].filter(d=>period==='day'?d===from:period==='month'?d.slice(0,7)===from.slice(0,7):d>=from&&d<=to).sort();
  const entries=dates.flatMap(date=>(dataset[date]||[]).filter(r=>!company||String(pick(r,fields[0])).trim().toUpperCase()===company.toUpperCase()).map(r=>({date,r})));
  return {dates,entries};
 }
@@ -229,7 +229,7 @@ export async function exportFluxExcel({dataset,metadata={},period,from,to,compan
   const month=date.slice(0,7),dailyValues=metadata['flux_bags_expected_daily_'+date];
   const dayMap=new Map();
   if(dailyValues&&typeof dailyValues==='object')for(const [raw,v] of Object.entries(dailyValues)){
-   const code=raw.trim().toUpperCase();if((!company||company.toUpperCase()===code)&&Number.isSafeInteger(v)&&v>=0){dayMap.set(code,v);allCodes.add(code);}
+   const code=raw.trim().toUpperCase();if((!company||company.toUpperCase()===code)&&Number.isSafeInteger(Number(v))&&Number(v)>=0){dayMap.set(code,Number(v));allCodes.add(code);}
   }
   expectedByDate.set(date,dayMap);
  }
@@ -241,7 +241,7 @@ export async function exportFluxExcel({dataset,metadata={},period,from,to,compan
   if(!hasDaily){
    const legacy=metadata['flux_bags_expected_'+month]||{};
    for(const [raw,v] of Object.entries(legacy)){
-    const code=raw.trim().toUpperCase();if((!company||company.toUpperCase()===code)&&Number.isSafeInteger(v)&&v>=0){allCodes.add(code);expectedByAirline.set(code,(expectedByAirline.get(code)||0)+v);}
+    const code=raw.trim().toUpperCase();if((!company||company.toUpperCase()===code)&&Number.isSafeInteger(v)&&v>=0){allCodes.add(code);expectedByAirline.set(code,(expectedByAirline.get(code)||0)+Number(v));}
    }
   }else for(const date of monthDates)for(const [code,v] of expectedByDate.get(date))expectedByAirline.set(code,(expectedByAirline.get(code)||0)+v);
  }
@@ -254,7 +254,8 @@ export async function exportFluxExcel({dataset,metadata={},period,from,to,compan
  zip.file('xl/worksheets/sheet5.xml',serializer.serializeToString(base));
  // Refresh the source dates and expected-baggage inputs used by the existing formula dashboards.
  const recap=await load('xl/worksheets/sheet1.xml'),synth=await load('xl/worksheets/sheet4.xml'),daySheet=await load('xl/worksheets/sheet3.xml');
- const airlines=[...allCodes].sort();
+ const templateCodes=Array.from({length:14},(_,i)=>cellText(recap,'A'+(14+i)).trim().toUpperCase()).filter(Boolean);
+ const airlines=[...new Set([...templateCodes,...allCodes])].filter(code=>allCodes.has(code));
  if(airlines.length>14)throw new Error('Le modèle officiel permet 14 compagnies maximum ('+airlines.length+' sélectionnées).');
  for(let i=0;i<14;i++){
   const row=fluxRow(recap,recap.getElementsByTagNameNS(fluxNS,'sheetData')[0],14+i);
@@ -263,15 +264,15 @@ export async function exportFluxExcel({dataset,metadata={},period,from,to,compan
  }
  for(let i=0;i<31;i++){
   const d=dates[i],row=fluxRow(synth,synth.getElementsByTagNameNS(fluxNS,'sheetData')[0],6+i);
-   for(let k=8;k<22;k++)fluxCell(synth,row,k,0);
+   // Preserve formula cells and update only operational expected values.
   setExcelDate(synth,row,0,d);
   for(let col=8;col<22;col++){
    const code=cellText(synth,fluxColumnName(col)+'5').trim().toUpperCase();
-   fluxCell(synth,row,col,d?(expectedByDate.get(d)?.get(code)||0):0);
+   fluxCell(synth,row,col,d?(expectedByDate.get(d)?.get(code)??0):'');
   }
   // Keep all other existing formula cells, only update expected count input if it is not a formula.
   const expectedCell=Array.from(row.children).find(c=>c.getAttribute('r')==='D'+(6+i));
-  if(expectedCell&&!Array.from(expectedCell.children).some(c=>c.localName==='f'))fluxCell(synth,row,3,d?Array.from(expectedByDate.get(d)?.values()||[]).reduce((a,b)=>a+b,0):0);
+  if(expectedCell&&!Array.from(expectedCell.children).some(c=>c.localName==='f'))fluxCell(synth,row,3,d?Array.from(expectedByDate.get(d)?.values()||[]).reduce((a,b)=>a+b,0):'');
  }
  // Restore the date dropdown at C5, backed by a list of dates in hidden helper column AA.
  const dateOptions=dates.slice(0,31);
