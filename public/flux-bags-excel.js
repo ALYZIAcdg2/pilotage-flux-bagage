@@ -205,7 +205,7 @@ export async function exportFluxExcel({dataset,metadata={},period,from,to,compan
  for(let i=0;i<1735;i++){
   const e=entries[i];let values=Array(14).fill('');
   if(e){const r=e.r,cie=String(pick(r,fields[0])).toUpperCase(),tag=tagList(pick(r,fields[3]));
-   values=[fluxDate(e.date),cie,String(pick(r,fields[1])),String(pick(r,fields[2])),tag.join('\n'),tag.length,...fields.slice(4).map(f=>String(pick(r,f)))];
+   values=[fluxDate(e.date),cie,(cie+String(pick(r,fields[1])).trim().replace(new RegExp('^'+cie,'i'),'')),String(pick(r,fields[2])),tag.join('\n'),tag.length,...fields.slice(4).map(f=>String(pick(r,f)))];
    const key=statusKey(r);if(!stats.has(cie))stats.set(cie,blank());for(const m of [stats.get(cie),daily.get(e.date)]){m.total++;m[key]++;}
   }
   fluxWriteCells(dossier,6+i,values);fluxWriteCells(base,6+i,values);
@@ -219,7 +219,7 @@ export async function exportFluxExcel({dataset,metadata={},period,from,to,compan
  zip.file('xl/worksheets/sheet2.xml',serializer.serializeToString(dossier));
  zip.file('xl/worksheets/sheet5.xml',serializer.serializeToString(base));
  // Refresh the source dates and expected-baggage inputs used by the existing formula dashboards.
- const recap=await load('xl/worksheets/sheet1.xml'),synth=await load('xl/worksheets/sheet4.xml');
+ const recap=await load('xl/worksheets/sheet1.xml'),synth=await load('xl/worksheets/sheet4.xml'),daySheet=await load('xl/worksheets/sheet3.xml');
  const airlines=[...stats.keys()].sort();
  if(airlines.length>14)throw new Error('Le modèle officiel permet 14 compagnies maximum ('+airlines.length+' sélectionnées).');
  for(let i=0;i<14;i++){
@@ -234,6 +234,37 @@ export async function exportFluxExcel({dataset,metadata={},period,from,to,compan
   const expectedCell=Array.from(row.children).find(c=>c.getAttribute('r')==='D'+(6+i));
   if(expectedCell&&!Array.from(expectedCell.children).some(c=>c.localName==='f'))fluxCell(synth,row,3,d?daily.get(d).expected:0);
  }
+ // Restore the date dropdown at C5, backed by a list of dates in hidden helper column AA.
+ const dateOptions=dates.slice(0,30);
+ for(let i=0;i<30;i++)fluxWriteCells(daySheet,5+i,Array(26).fill(null).concat(dateOptions[i]?fluxDate(dateOptions[i]):''));
+ const data=daySheet.getElementsByTagNameNS(fluxNS,'sheetData')[0],chosen=fluxRow(daySheet,data,5);
+ const current=Array.from(chosen.children).find(c=>c.getAttribute('r')==='C5');
+ if(!current||!dateOptions.some(d=>fluxDate(d)===(current.getElementsByTagNameNS(fluxNS,'t')[0]?.textContent||'')))fluxCell(daySheet,chosen,2,dateOptions.length?fluxDate(dateOptions[0]):'');
+ let dvs=daySheet.getElementsByTagNameNS(fluxNS,'dataValidations')[0];
+ if(!dvs){dvs=daySheet.createElementNS(fluxNS,'dataValidations');const ext=Array.from(daySheet.documentElement.children).find(x=>['hyperlinks','printOptions','pageMargins','pageSetup','headerFooter','drawing','legacyDrawing','extLst'].includes(x.localName));daySheet.documentElement.insertBefore(dvs,ext||null);}
+ for(const v of Array.from(dvs.children))if(v.getAttribute('sqref')==='C5')dvs.removeChild(v);
+ const dv=daySheet.createElementNS(fluxNS,'dataValidation');dv.setAttribute('type','list');dv.setAttribute('allowBlank','0');dv.setAttribute('showDropDown','0');dv.setAttribute('sqref','C5');
+ const f=daySheet.createElementNS(fluxNS,'formula1');f.textContent='$AA$5:$AA
+ zip.file('xl/worksheets/sheet4.xml',serializer.serializeToString(synth));
+ // Remove old formula caches, so Excel recalculates from the new BASE data.
+ for(const file of ['xl/worksheets/sheet1.xml','xl/worksheets/sheet3.xml','xl/worksheets/sheet4.xml','xl/worksheets/sheet5.xml']){
+  const doc=await load(file);
+  for(const c of Array.from(doc.getElementsByTagNameNS(fluxNS,'c'))){
+   if(Array.from(c.children).some(x=>x.localName==='f'))for(const v of Array.from(c.children).filter(x=>x.localName==='v'))c.removeChild(v);
+  }
+  zip.file(file,serializer.serializeToString(doc));
+ }
+ const wb=await load('xl/workbook.xml'),calc=wb.getElementsByTagNameNS(fluxNS,'calcPr')[0]||wb.createElementNS(fluxNS,'calcPr');
+ calc.setAttribute('fullCalcOnLoad','1');calc.setAttribute('forceFullCalc','1');calc.setAttribute('calcMode','auto');if(!calc.parentNode)wb.documentElement.appendChild(calc);
+ zip.file('xl/workbook.xml',serializer.serializeToString(wb));
+ const buffer=await zip.generateAsync({type:'arraybuffer',compression:'DEFLATE',compressionOptions:{level:6}});
+ const name='FLUX_BAGAGES_SUPERVISION_'+(period==='range'?from+'_au_'+to:period==='month'?from.slice(0,7):from)+'_'+(company||'TOUTES')+'.xlsx';
+ download(buffer,name);
+ return {name,dossiers:entries.length,compagnies:airlines.length,jours:dates.length};
+}
++(4+Math.max(1,dateOptions.length));dv.appendChild(f);dvs.appendChild(dv);dvs.setAttribute('count',String(dvs.children.length));
+ zip.file('xl/worksheets/sheet3.xml',serializer.serializeToString(daySheet));
+ 
  zip.file('xl/worksheets/sheet1.xml',serializer.serializeToString(recap));
  zip.file('xl/worksheets/sheet4.xml',serializer.serializeToString(synth));
  // Remove old formula caches, so Excel recalculates from the new BASE data.
