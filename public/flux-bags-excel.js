@@ -586,7 +586,17 @@ export async function exportFluxExcel({dataset,metadata={},period,from,to,compan
    const cell=Array.from(row.children).find(x=>x.localName==='c'&&x.getAttribute('r')==='B'+n);
    if(!cell)continue;
    const formula=Array.from(cell.children).find(x=>x.localName==='f');
-   if(formula&&formula.textContent.includes('BASE!$A$6:$A$1740'))cell.setAttribute('s',String(dateStyleIndex));
+   if(formula&&formula.textContent.includes('BASE!$A$6:$A$1740')){
+    const baseDateXf=xfs.children[dateStyleIndex];
+    if(baseDateXf){
+     const centered=baseDateXf.cloneNode(true);centered.setAttribute('applyAlignment','1');
+     let alignment=Array.from(centered.children).find(x=>x.localName==='alignment');
+     if(!alignment){alignment=styles.createElementNS(fluxNS,'alignment');centered.appendChild(alignment);}
+     alignment.setAttribute('horizontal','center');alignment.setAttribute('vertical','center');
+     xfs.appendChild(centered);xfs.setAttribute('count',String(xfs.children.length));
+     cell.setAttribute('s',String(xfs.children.length-1));
+    }
+   }
   }
  }
  // Open at A1 on every worksheet, not at the last saved template scroll position.
