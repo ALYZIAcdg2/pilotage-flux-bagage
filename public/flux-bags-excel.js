@@ -554,6 +554,28 @@ export async function exportFluxExcel({dataset,metadata={},period,from,to,compan
    if(selectedCompany)fluxCell(synth,row,8,expected===undefined?'':expected);
   }
  }
+ // Apply date display format to the duplicate-TAG table on RÉCAPITULATIF.
+ // Change the cell style only: preserve original Excel serials, formulas and TAG data.
+ {
+  const data=recap.getElementsByTagNameNS(fluxNS,'sheetData')[0];
+  const rows=Array.from(data.children).filter(n=>n.localName==='row');
+  for(const header of rows){
+   const n=Number(header.getAttribute('r'));
+   const dateColumns=Array.from(header.children).filter(cell=>cell.localName==='c'&&cellText(recap,cell.getAttribute('r')).trim().toUpperCase()==='DATE');
+   for(const dateHeader of dateColumns){
+    const col=fluxColumn(dateHeader.getAttribute('r'));
+    const headings=Array.from(header.children).filter(cell=>cell.localName==='c').map(cell=>cellText(recap,cell.getAttribute('r')).trim().toUpperCase());
+    if(!headings.some(x=>x.includes('TAG'))||!headings.some(x=>x.includes('OCC')))continue;
+    for(const row of rows){
+     const rowNumber=Number(row.getAttribute('r'));if(rowNumber<=n)continue;
+     const cell=Array.from(row.children).find(x=>x.localName==='c'&&x.getAttribute('r')===fluxColumnName(col)+rowNumber);
+     if(!cell)continue;
+     const v=Array.from(cell.children).find(x=>x.localName==='v');
+     if(v&&Number.isFinite(Number(v.textContent))&&Number(v.textContent)>20000&&Number(v.textContent)<100000)cell.setAttribute('s',String(dateStyleIndex));
+    }
+   }
+  }
+ }
  // Open at A1 on every worksheet, not at the last saved template scroll position.
  for(const file of ['xl/worksheets/sheet1.xml','xl/worksheets/sheet2.xml','xl/worksheets/sheet3.xml','xl/worksheets/sheet4.xml','xl/worksheets/sheet5.xml']){
   const doc=file.endsWith('sheet1.xml')?recap:file.endsWith('sheet2.xml')?dossier:file.endsWith('sheet3.xml')?daySheet:file.endsWith('sheet4.xml')?synth:base;
