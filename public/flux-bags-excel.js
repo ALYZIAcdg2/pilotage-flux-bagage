@@ -630,63 +630,51 @@ export async function exportFluxExcel({dataset,metadata={},period,from,to,compan
    zip.file(file,serializer.serializeToString(chartDoc));
   }
  }
- // Avoid displaying a floating 'ANNULÉS 0%' label on a 100% saved donut.
+ // Limit evolution chart references to actual dated rows, excluding TOTAL.
  {
-  const file='xl/charts/chart2.xml';
-  if(zip.file(file)){
-   const chart=parser.parseFromString(await zip.file(file).async('string'),'application/xml');
-   const ns='http://schemas.openxmlformats.org/drawingml/2006/chart';
-   const donuts=Array.from(chart.getElementsByTagNameNS(ns,'doughnutChart'));
-   const labels=donuts.length?Array.from(donuts[0].children).find(n=>n.localName==='dLbls'):null;
-   if(labels){
-    const labelsToHide=selectedCompany?[
-     ['saved',stats.get(selectedCompany)?.saved||0],['loaded',stats.get(selectedCompany)?.loaded||0],
-     ['notLoaded',stats.get(selectedCompany)?.notLoaded||0],['cancelled',stats.get(selectedCompany)?.cancelled||0]
-    ]:[];
-    for(let i=0;i<labelsToHide.length;i++)if(labelsToHide[i][1]===0){
-     const item=chart.createElementNS(ns,'c:dLbl');
-     const idx=chart.createElementNS(ns,'c:idx');idx.setAttribute('val',String(i));item.appendChild(idx);
-     for(const name of ['showLegendKey','showVal','showCatName','showSerName','showPercent']){
-      const flag=chart.createElementNS(ns,'c:'+name);flag.setAttribute('val','0');item.appendChild(flag);
+  const last=5+Math.min(dates.length,31);
+  for(const file of Object.keys(zip.files).filter(name=>name.startsWith('xl/charts/chart')&&name.endsWith('.xml'))){
+   const doc=parser.parseFromString(await zip.file(file).async('string'),'application/xml');
+   const ns='http://schemas.openxmlformats.org/drawingml/2006/chart';let modified=false;
+   for(const line of Array.from(doc.getElementsByTagNameNS(ns,'lineChart'))){
+    for(const formula of Array.from(line.getElementsByTagNameNS(ns,'f'))){
+     const val=formula.textContent||'';
+     if(val.includes('SYNTHÈSE PAR DATE')){
+      const parts=val.split(':');if(parts.length===2){
+       const lastPart=parts[1];const match=lastPart.match(/^(\\$?[A-Z]+\\$?)([0-9]+)$/);
+       if(match&&Number(match[2])>last){formula.textContent=parts[0]+':'+match[1]+last;modified=true;}
+      }
      }
-     labels.insertBefore(item,labels.firstChild);
     }
    }
-   zip.file(file,serializer.serializeToString(chart));
+   if(modified)zip.file(file,serializer.serializeToString(doc));
   }
  }
- // Hide overlapping donut data labels; the legend and numeric recap table remain.
- if(zip.file('xl/charts/chart2.xml')){
-  const doc=parser.parseFromString(await zip.file('xl/charts/chart2.xml').async('string'),'application/xml');
+ // Keep status labels, but hide zero-value slices to prevent overlapping labels.
+ for(const file of Object.keys(zip.files).filter(name=>name.startsWith('xl/charts/chart')&&name.endsWith('.xml'))){
+  const chart=parser.parseFromString(await zip.file(file).async('string'),'application/xml');
   const ns='http://schemas.openxmlformats.org/drawingml/2006/chart';
-  for(const donut of Array.from(doc.getElementsByTagNameNS(ns,'doughnutChart'))){
-   let labels=Array.from(donut.children).find(n=>n.localName==='dLbls');
-   if(!labels){labels=doc.createElementNS(ns,'c:dLbls');donut.appendChild(labels);}
-   for(const child of Array.from(labels.children))labels.removeChild(child);
-   for(const name of ['showLegendKey','showVal','showCatName','showSerName','showPercent']){
-    const flag=doc.createElementNS(ns,'c:'+name);flag.setAttribute('val','0');labels.appendChild(flag);
-   }
-  }
-  zip.file('xl/charts/chart2.xml',serializer.serializeToString(doc));
- }
- // The status doughnut may be chart1.xml rather than chart2.xml.
- // Remove every per-point data label as well as global labels, on every doughnut chart.
- for(const file of Object.keys(zip.files).filter(name=>/^xl\/charts\/chart\d+\.xml$/.test(name))){
-  const doc=parser.parseFromString(await zip.file(file).async('string'),'application/xml');
-  const ns='http://schemas.openxmlformats.org/drawingml/2006/chart';
-  let changed=false;
-  for(const donut of Array.from(doc.getElementsByTagNameNS(ns,'doughnutChart'))){
-   for(const series of Array.from(donut.children).filter(n=>n.localName==='ser')){
-    for(const labels of Array.from(series.children).filter(n=>n.localName==='dLbls'))series.removeChild(labels);
-   }
-   for(const labels of Array.from(donut.children).filter(n=>n.localName==='dLbls'))donut.removeChild(labels);
-   const labels=doc.createElementNS(ns,'c:dLbls');
+  let modified=false;
+  for(const donut of Array.from(chart.getElementsByTagNameNS(ns,'doughnutChart'))){
+   for(const series of Array.from(donut.children).filter(n=>n.localName==='ser'))for(const old of Array.from(series.children).filter(n=>n.localName==='dLbls'))series.removeChild(old);
+   for(const old of Array.from(donut.children).filter(n=>n.localName==='dLbls'))donut.removeChild(old);
+   const labels=chart.createElementNS(ns,'c:dLbls');
+   const position=chart.createElementNS(ns,'c:dLblPos');position.setAttribute('val','outEnd');labels.appendChild(position);
    for(const key of ['showLegendKey','showVal','showCatName','showSerName','showPercent']){
-    const node=doc.createElementNS(ns,'c:'+key);node.setAttribute('val','0');labels.appendChild(node);
+    const flag=chart.createElementNS(ns,'c:'+key);flag.setAttribute('val',key==='showCatName'||key==='showPercent'?'1':'0');labels.appendChild(flag);
    }
-   donut.appendChild(labels);changed=true;
+   const leaders=chart.createElementNS(ns,'c:showLeaderLines');leaders.setAttribute('val','1');labels.appendChild(leaders);
+   if(selectedCompany){
+    const counts=[stats.get(selectedCompany)?.saved||0,stats.get(selectedCompany)?.loaded||0,stats.get(selectedCompany)?.notLoaded||0,stats.get(selectedCompany)?.cancelled||0];
+    for(let i=0;i<counts.length;i++)if(counts[i]===0){
+     const point=chart.createElementNS(ns,'c:dLbl');const idx=chart.createElementNS(ns,'c:idx');idx.setAttribute('val',String(i));point.appendChild(idx);
+     const show=chart.createElementNS(ns,'c:showCatName');show.setAttribute('val','0');point.appendChild(show);
+     const percent=chart.createElementNS(ns,'c:showPercent');percent.setAttribute('val','0');point.appendChild(percent);labels.insertBefore(point,labels.firstChild);
+    }
+   }
+   donut.appendChild(labels);modified=true;
   }
-  if(changed)zip.file(file,serializer.serializeToString(doc));
+  if(modified)zip.file(file,serializer.serializeToString(chart));
  }
  // Ensure the purple ANNULÉS header fits on one line.
  {
