@@ -608,74 +608,7 @@ export async function exportFluxExcel({dataset,metadata={},period,from,to,compan
  if(relRaw){const relDoc=parser.parseFromString(relRaw,'application/xml');for(const el of Array.from(relDoc.documentElement.children))if((el.getAttribute('Type')||'').endsWith('/calcChain'))el.remove();zip.file(relPath,serializer.serializeToString(relDoc));}
  const typesRaw=await zip.file('[Content_Types].xml')?.async('string');
  if(typesRaw){const typesDoc=parser.parseFromString(typesRaw,'application/xml');for(const el of Array.from(typesDoc.documentElement.children))if(el.getAttribute('PartName')==='/xl/calcChain.xml')el.remove();zip.file('[Content_Types].xml',serializer.serializeToString(typesDoc));}
- // Date axis formatting applies to every export, regardless of company filter.
- {
-  const file='xl/charts/chart3.xml';
-  if(zip.file(file)){
-   const chartDoc=parser.parseFromString(await zip.file(file).async('string'),'application/xml');
-   const chartNS='http://schemas.openxmlformats.org/drawingml/2006/chart';
-   for(const axis of Array.from(chartDoc.getElementsByTagNameNS(chartNS,'catAx'))){
-    let fmt=Array.from(axis.children).find(x=>x.localName==='numFmt');
-    if(!fmt){fmt=chartDoc.createElementNS(chartNS,'c:numFmt');axis.appendChild(fmt);}
-    fmt.setAttribute('formatCode','dd/mm');fmt.setAttribute('sourceLinked','0');
-   }
-   // Category numeric caches must also carry the date format, not Excel serials.
-   for(const cache of Array.from(chartDoc.getElementsByTagNameNS(chartNS,'numCache'))){
-    const parent=cache.parentNode;
-    if(parent?.localName!=='numRef'||parent.parentNode?.localName!=='cat')continue;
-    let format=Array.from(cache.children).find(x=>x.localName==='formatCode');
-    if(!format){format=chartDoc.createElementNS(chartNS,'c:formatCode');cache.insertBefore(format,cache.firstChild);}
-    format.textContent='dd/mm/yyyy';
-   }
-   zip.file(file,serializer.serializeToString(chartDoc));
-  }
- }
- // Limit evolution chart references to actual dated rows, excluding TOTAL.
- {
-  const last=5+Math.min(dates.length,31);
-  for(const file of Object.keys(zip.files).filter(name=>name.startsWith('xl/charts/chart')&&name.endsWith('.xml'))){
-   const doc=parser.parseFromString(await zip.file(file).async('string'),'application/xml');
-   const ns='http://schemas.openxmlformats.org/drawingml/2006/chart';let modified=false;
-   for(const line of Array.from(doc.getElementsByTagNameNS(ns,'lineChart'))){
-    for(const formula of Array.from(line.getElementsByTagNameNS(ns,'f'))){
-     const val=formula.textContent||'';
-     if(val.includes('SYNTHÈSE PAR DATE')){
-      const parts=val.split(':');if(parts.length===2){
-       const lastPart=parts[1];const match=lastPart.match(/^([$]?[A-Z]+[$]?)([0-9]+)$/);
-       if(match&&Number(match[2])>last){formula.textContent=parts[0]+':'+match[1]+last;modified=true;}
-      }
-     }
-    }
-   }
-   if(modified)zip.file(file,serializer.serializeToString(doc));
-  }
- }
- // Keep status labels, but hide zero-value slices to prevent overlapping labels.
- for(const file of Object.keys(zip.files).filter(name=>name.startsWith('xl/charts/chart')&&name.endsWith('.xml'))){
-  const chart=parser.parseFromString(await zip.file(file).async('string'),'application/xml');
-  const ns='http://schemas.openxmlformats.org/drawingml/2006/chart';
-  let modified=false;
-  for(const donut of Array.from(chart.getElementsByTagNameNS(ns,'doughnutChart'))){
-   for(const series of Array.from(donut.children).filter(n=>n.localName==='ser'))for(const old of Array.from(series.children).filter(n=>n.localName==='dLbls'))series.removeChild(old);
-   for(const old of Array.from(donut.children).filter(n=>n.localName==='dLbls'))donut.removeChild(old);
-   const labels=chart.createElementNS(ns,'c:dLbls');
-   const position=chart.createElementNS(ns,'c:dLblPos');position.setAttribute('val','outEnd');labels.appendChild(position);
-   for(const key of ['showLegendKey','showVal','showCatName','showSerName','showPercent']){
-    const flag=chart.createElementNS(ns,'c:'+key);flag.setAttribute('val',key==='showCatName'||key==='showPercent'?'1':'0');labels.appendChild(flag);
-   }
-   const leaders=chart.createElementNS(ns,'c:showLeaderLines');leaders.setAttribute('val','1');labels.appendChild(leaders);
-   if(selectedCompany){
-    const counts=[stats.get(selectedCompany)?.saved||0,stats.get(selectedCompany)?.loaded||0,stats.get(selectedCompany)?.notLoaded||0,stats.get(selectedCompany)?.cancelled||0];
-    for(let i=0;i<counts.length;i++)if(counts[i]===0){
-     const point=chart.createElementNS(ns,'c:dLbl');const idx=chart.createElementNS(ns,'c:idx');idx.setAttribute('val',String(i));point.appendChild(idx);
-     const show=chart.createElementNS(ns,'c:showCatName');show.setAttribute('val','0');point.appendChild(show);
-     const percent=chart.createElementNS(ns,'c:showPercent');percent.setAttribute('val','0');point.appendChild(percent);labels.insertBefore(point,labels.firstChild);
-    }
-   }
-   donut.appendChild(labels);modified=true;
-  }
-  if(modified)zip.file(file,serializer.serializeToString(chart));
- }
+ // Preserve original chart XML untouched: manual chart rewrites triggered Excel repair.
  // Ensure the purple ANNULÉS header fits on one line.
  {
   const data=recap.getElementsByTagNameNS(fluxNS,'sheetData')[0];
