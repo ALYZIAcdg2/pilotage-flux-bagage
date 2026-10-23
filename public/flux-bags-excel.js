@@ -669,6 +669,30 @@ export async function exportFluxExcel({dataset,metadata={},period,from,to,compan
   }
   zip.file('xl/charts/chart2.xml',serializer.serializeToString(doc));
  }
+ // The status doughnut may be chart1.xml rather than chart2.xml.
+ // Remove every per-point data label as well as global labels, on every doughnut chart.
+ for(const file of Object.keys(zip.files).filter(name=>/^xl\\/charts\\/chart\\d+\\.xml$/.test(name))){
+  const doc=parser.parseFromString(await zip.file(file).async('string'),'application/xml');
+  const ns='http://schemas.openxmlformats.org/drawingml/2006/chart';
+  let changed=false;
+  for(const donut of Array.from(doc.getElementsByTagNameNS(ns,'doughnutChart'))){
+   for(const series of Array.from(donut.children).filter(n=>n.localName==='ser')){
+    for(const labels of Array.from(series.children).filter(n=>n.localName==='dLbls'))series.removeChild(labels);
+   }
+   for(const labels of Array.from(donut.children).filter(n=>n.localName==='dLbls'))donut.removeChild(labels);
+   const labels=doc.createElementNS(ns,'c:dLbls');
+   for(const key of ['showLegendKey','showVal','showCatName','showSerName','showPercent']){
+    const node=doc.createElementNS(ns,'c:'+key);node.setAttribute('val','0');labels.appendChild(node);
+   }
+   donut.appendChild(labels);changed=true;
+  }
+  if(changed)zip.file(file,serializer.serializeToString(doc));
+ }
+ // Ensure the purple ANNULÉS header fits on one line.
+ {
+  const data=recap.getElementsByTagNameNS(fluxNS,'sheetData')[0];
+  const row=fluxRow(recap,data,13);row.setAttribute('ht','36');row.setAttribute('customHeight','1');
+ }
  // Clear stale chart caches from the original all-airlines workbook. Excel will
  // rebuild each chart from the company-filtered sheet data on opening.
  if(selectedCompany){
