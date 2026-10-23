@@ -338,7 +338,7 @@ export async function exportFluxExcel({dataset,metadata={},period,from,to,compan
  // Clear stale chart caches from the original all-airlines workbook. Excel will
  // rebuild each chart from the company-filtered sheet data on opening.
  if(selectedCompany){
-  for(const file of Object.keys(zip.files).filter(name=>/^xl\\/charts\\/chart\\d+\\.xml$/.test(name))){
+  for(const file of Object.keys(zip.files).filter(name=>name.startsWith('xl/charts/chart')&&name.endsWith('.xml'))){
    const raw=await zip.file(file).async('string'),chartDoc=parser.parseFromString(raw,'application/xml');
    if(chartDoc.getElementsByTagName('parsererror').length)throw new Error('Graphique Excel invalide : '+file);
    for(const node of Array.from(chartDoc.getElementsByTagName('*'))){
