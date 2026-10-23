@@ -528,6 +528,32 @@ export async function exportFluxExcel({dataset,metadata={},period,from,to,compan
   const fmt=daySheet.getElementsByTagNameNS(fluxNS,'sheetFormatPr')[0];
   if(fmt)fmt.removeAttribute('zeroHeight');
  }
+ // Repair remaining presentation details without altering operational dossier data.
+ {
+  const merges=daySheet.getElementsByTagNameNS(fluxNS,'mergeCells')[0];
+  if(merges){
+   for(const node of Array.from(merges.children)){
+    const ref=node.getAttribute('ref')||'';
+    if(/^I9(?::[A-Z]+\\d+)?$/.test(ref))merges.removeChild(node);
+   }
+   merges.setAttribute('count',String(merges.children.length));
+  }
+  const dayTotal=fluxRow(daySheet,daySheet.getElementsByTagNameNS(fluxNS,'sheetData')[0],9+(selectedCompany?1:Math.max(1,Math.min(14,airlines.length))));
+  const dayTotalCells=Array.from(dayTotal.children).filter(n=>n.localName==='c');
+  const dayTotalStyles=new Map(dayTotalCells.map(n=>[fluxColumn(n.getAttribute('r')),n.getAttribute('s')]));
+  const synthTotal=fluxRow(synth,synth.getElementsByTagNameNS(fluxNS,'sheetData')[0],6+Math.min(dates.length,31));
+  for(const cell of Array.from(synthTotal.children).filter(n=>n.localName==='c')){
+   const style=dayTotalStyles.get(fluxColumn(cell.getAttribute('r')));
+   if(style!==null&&style!==undefined)cell.setAttribute('s',style);
+  }
+  // Source expected-baggage counts come from daily metadata, never dossier totals.
+  // Do not silently replace missing source entries with an invented zero.
+  for(let i=0;i<Math.min(dates.length,31);i++){
+   const date=dates[i],row=fluxRow(synth,synth.getElementsByTagNameNS(fluxNS,'sheetData')[0],6+i);
+   const expected=expectedByDate.get(date)?.get(selectedCompany);
+   if(selectedCompany)fluxCell(synth,row,8,expected===undefined?'':expected);
+  }
+ }
  // Open at A1 on every worksheet, not at the last saved template scroll position.
  for(const file of ['xl/worksheets/sheet1.xml','xl/worksheets/sheet2.xml','xl/worksheets/sheet3.xml','xl/worksheets/sheet4.xml','xl/worksheets/sheet5.xml']){
   const doc=file.endsWith('sheet1.xml')?recap:file.endsWith('sheet2.xml')?dossier:file.endsWith('sheet3.xml')?daySheet:file.endsWith('sheet4.xml')?synth:base;
