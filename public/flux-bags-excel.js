@@ -487,6 +487,10 @@ export async function exportFluxExcel({dataset,metadata={},period,from,to,compan
   zip.file(file,serializer.serializeToString(doc));
  }
  const wb=await load('xl/workbook.xml'),calc=wb.getElementsByTagNameNS(fluxNS,'calcPr')[0]||wb.createElementNS(fluxNS,'calcPr');
+ const bookViews=wb.getElementsByTagNameNS(fluxNS,'bookViews')[0];
+ if(bookViews)for(const view of Array.from(bookViews.children).filter(n=>n.localName==='workbookView')){
+  view.setAttribute('activeTab','0');view.setAttribute('firstSheet','0');
+ }
  calc.setAttribute('fullCalcOnLoad','1');calc.setAttribute('forceFullCalc','1');calc.setAttribute('calcMode','auto');if(!calc.parentNode)wb.documentElement.appendChild(calc);
  zip.file('xl/workbook.xml',serializer.serializeToString(wb));
  // A modified formula workbook must not retain its stale calculation chain.
