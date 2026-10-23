@@ -417,6 +417,59 @@ export async function exportFluxExcel({dataset,metadata={},period,from,to,compan
    const row=fluxRow(daySheet,data,i);row.setAttribute('hidden','1');row.removeAttribute('outlineLevel');row.removeAttribute('collapsed');
   }
  }
+ // Final daily layout: no hidden airline rows, and TOTAL immediately follows the airlines.
+ {
+  const data=daySheet.getElementsByTagNameNS(fluxNS,'sheetData')[0];
+  const count=selectedCompany?1:Math.max(1,Math.min(14,airlines.length));
+  const totalAt=9+count;
+  const originalTotal=fluxRow(daySheet,data,23);
+  const totalStyle=Array.from(originalTotal.children).filter(n=>n.localName==='c').map(n=>({col:fluxColumn(n.getAttribute('r')),style:n.getAttribute('s')}));
+  // Remove obsolete template rows, rather than hiding them (Excel skips hidden rows).
+  for(const row of Array.from(data.children).filter(n=>n.localName==='row')){
+   const n=Number(row.getAttribute('r'));
+   if(n>=9&&n<=23&&n>=totalAt)data.removeChild(row);
+  }
+  for(let n=9;n<totalAt;n++){
+   const row=fluxRow(daySheet,data,n);
+   for(const attr of ['hidden','collapsed','outlineLevel'])row.removeAttribute(attr);
+   row.setAttribute('ht','24');row.setAttribute('customHeight','1');
+  }
+  const total=fluxRow(daySheet,data,totalAt);
+  total.removeAttribute('hidden');total.removeAttribute('collapsed');total.removeAttribute('outlineLevel');
+  total.setAttribute('ht','24');total.setAttribute('customHeight','1');
+  fluxCell(daySheet,total,0,'TOTAL JOUR');
+  for(let j=1;j<=6;j++){
+   fluxCell(daySheet,total,j,0);
+   const cell=Array.from(total.children).find(n=>n.getAttribute('r')===fluxColumnName(j)+totalAt);
+   const existing=Array.from(cell.children).find(n=>n.localName==='v');if(existing)cell.removeChild(existing);
+   const formula=daySheet.createElementNS(fluxNS,'f');formula.textContent='SUM('+fluxColumnName(j)+'9:'+fluxColumnName(j)+(totalAt-1)+')';cell.insertBefore(formula,cell.firstChild);
+  }
+  for(const {col,style} of totalStyle){const cell=Array.from(total.children).find(n=>n.getAttribute('r')===fluxColumnName(col)+totalAt);if(cell&&style!==null)cell.setAttribute('s',style);}
+  // Keep the original note visible, but move it from I9 to I8.
+  const oldNoteRow=fluxRow(daySheet,data,9),newNoteRow=fluxRow(daySheet,data,8);
+  const oldNote=Array.from(oldNoteRow.children).find(n=>n.getAttribute('r')==='I9');
+  if(oldNote){const existing=Array.from(newNoteRow.children).find(n=>n.getAttribute('r')==='I8');if(existing)newNoteRow.removeChild(existing);oldNoteRow.removeChild(oldNote);oldNote.setAttribute('r','I8');const next=Array.from(newNoteRow.children).find(n=>n.localName==='c'&&fluxColumn(n.getAttribute('r'))>8);newNoteRow.insertBefore(oldNote,next||null);}
+  const merges=daySheet.getElementsByTagNameNS(fluxNS,'mergeCells')[0];
+  if(merges)for(const merge of Array.from(merges.children)){
+   const ref=merge.getAttribute('ref')||'';
+   if(/^I9(?::[A-Z]+\\d+)?$/.test(ref)){
+    const match=ref.match(/^I9(?::([A-Z]+)(\\d+))?$/);
+    merge.setAttribute('ref',match&&match[1]?'I8:'+match[1]+(Number(match[2])-1):'I8');
+   }
+  }
+ }
+ // Open at A1 on every worksheet, not at the last saved template scroll position.
+ for(const file of ['xl/worksheets/sheet1.xml','xl/worksheets/sheet2.xml','xl/worksheets/sheet3.xml','xl/worksheets/sheet4.xml','xl/worksheets/sheet5.xml']){
+  const doc=file.endsWith('sheet1.xml')?recap:file.endsWith('sheet2.xml')?dossier:file.endsWith('sheet3.xml')?daySheet:file.endsWith('sheet4.xml')?synth:base;
+  const views=doc.getElementsByTagNameNS(fluxNS,'sheetViews')[0];
+  if(views)for(const view of Array.from(views.children).filter(n=>n.localName==='sheetView')){
+   view.setAttribute('topLeftCell','A1');
+   let selections=Array.from(view.children).filter(n=>n.localName==='selection');
+   if(!selections.length){const sel=doc.createElementNS(fluxNS,'selection');view.appendChild(sel);selections=[sel];}
+   for(const selection of selections){selection.setAttribute('activeCell','A1');selection.setAttribute('sqref','A1');}
+  }
+  zip.file(file,serializer.serializeToString(doc));
+ }
  zip.file('xl/worksheets/sheet3.xml',serializer.serializeToString(daySheet));
  zip.file('xl/worksheets/sheet1.xml',serializer.serializeToString(recap));
  zip.file('xl/worksheets/sheet4.xml',serializer.serializeToString(synth));
