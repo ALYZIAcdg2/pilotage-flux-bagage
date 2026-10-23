@@ -579,7 +579,11 @@ export async function exportFluxExcel({dataset,metadata={},period,from,to,compan
  // Duplicate-TAG dates: reuse one valid centered date style for formula cells.
  // IMPORTANT: serialize the updated styles.xml before generating the XLSX.
  {
-  const centered=xfs.children[dateStyleIndex].cloneNode(true);
+  // Keep the template's date-column border and fill; change only the number format/alignment.
+  const sample=Array.from(recap.getElementsByTagNameNS(fluxNS,'c')).find(x=>x.getAttribute('r')==='B113');
+  const originalStyle=sample?Number(sample.getAttribute('s'))||0:0;
+  const centered=(xfs.children[originalStyle]||xfs.children[0]).cloneNode(true);
+  centered.setAttribute('numFmtId','180');centered.setAttribute('applyNumberFormat','1');
   centered.setAttribute('applyAlignment','1');
   let alignment=Array.from(centered.children).find(x=>x.localName==='alignment');
   if(!alignment){alignment=styles.createElementNS(fluxNS,'alignment');centered.appendChild(alignment);}
