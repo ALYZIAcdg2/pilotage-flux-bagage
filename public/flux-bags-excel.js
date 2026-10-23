@@ -387,6 +387,33 @@ export async function exportFluxExcel({dataset,metadata={},period,from,to,compan
   const expectedCell=Array.from(row.children).find(c=>c.getAttribute('r')==='D'+(6+i));
   if(expectedCell&&!Array.from(expectedCell.children).some(c=>c.localName==='f'))fluxCell(synth,row,3,d?Array.from(expectedByDate.get(d)?.values()||[]).reduce((a,b)=>a+b,0):'');
  }
+ // Compact synthesis to the actual dates, with the TOTAL directly below.
+ // Never leave formula-filled but undated template rows visible.
+ {
+  const data=synth.getElementsByTagNameNS(fluxNS,'sheetData')[0];
+  const count=Math.min(dates.length,31);
+  const totalAt=6+count;
+  const sourceTotal=Array.from(data.children).find(n=>n.localName==='row'&&Number(n.getAttribute('r'))===37);
+  const styles=sourceTotal?Array.from(sourceTotal.children).filter(n=>n.localName==='c').map(n=>({col:fluxColumn(n.getAttribute('r')),style:n.getAttribute('s')})):[];
+  for(const row of Array.from(data.children).filter(n=>n.localName==='row')){
+   const n=Number(row.getAttribute('r'));
+   if(n>=totalAt&&n<=37)data.removeChild(row);
+  }
+  const total=fluxRow(synth,data,totalAt);
+  total.removeAttribute('hidden');total.setAttribute('ht','24');total.setAttribute('customHeight','1');
+  fluxCell(synth,total,0,'TOTAL');
+  for(let col=1;col<=8;col++){
+   fluxCell(synth,total,col,0);
+   const cell=Array.from(total.children).find(n=>n.getAttribute('r')===fluxColumnName(col)+totalAt);
+   const value=Array.from(cell.children).find(n=>n.localName==='v');if(value)cell.removeChild(value);
+   const f=synth.createElementNS(fluxNS,'f');f.textContent='SUM('+fluxColumnName(col)+'6:'+fluxColumnName(col)+(totalAt-1)+')';cell.insertBefore(f,cell.firstChild);
+   const style=styles.find(s=>s.col===col)?.style;if(style!==undefined&&style!==null)cell.setAttribute('s',style);
+  }
+  for(const row of Array.from(data.children).filter(n=>n.localName==='row'&&Number(n.getAttribute('r'))>=6&&Number(n.getAttribute('r'))<=totalAt)){
+   row.removeAttribute('hidden');row.removeAttribute('collapsed');row.removeAttribute('outlineLevel');
+  }
+  const format=synth.getElementsByTagNameNS(fluxNS,'sheetFormatPr')[0];if(format)format.removeAttribute('zeroHeight');
+ }
  // Restore the date dropdown at C5, backed by a list of dates in hidden helper column AA.
  const dateOptions=dates.slice(0,31);
  for(let i=0;i<31;i++){const dr=fluxRow(daySheet,daySheet.getElementsByTagNameNS(fluxNS,'sheetData')[0],5+i);setExcelDate(daySheet,dr,26,dateOptions[i]);}
