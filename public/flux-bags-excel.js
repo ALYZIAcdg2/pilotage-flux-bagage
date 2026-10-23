@@ -298,6 +298,15 @@ export async function exportFluxExcel({dataset,metadata={},period,from,to,compan
    const dr=fluxRow(daySheet,daySheet.getElementsByTagNameNS(fluxNS,'sheetData')[0],9+i);
    if(i>0)dr.setAttribute('hidden','1');else dr.removeAttribute('hidden');
   }
+  // Keep the selected airline visible: the template groups rows 9:22.
+  const selectedDayRow=fluxRow(daySheet,daySheet.getElementsByTagNameNS(fluxNS,'sheetData')[0],9);
+  selectedDayRow.removeAttribute('hidden');selectedDayRow.removeAttribute('collapsed');
+  selectedDayRow.setAttribute('ht','23');selectedDayRow.setAttribute('customHeight','1');
+  fluxCell(daySheet,selectedDayRow,0,selectedCompany);
+  // Show the total immediately after the single airline, preserving its formulas.
+  const dayTotal=fluxRow(daySheet,daySheet.getElementsByTagNameNS(fluxNS,'sheetData')[0],23);
+  dayTotal.removeAttribute('hidden');dayTotal.removeAttribute('collapsed');
+  // Do not overwrite the B:G daily formulas: they recalculate when C5 changes.
   // Keep only the selected airline's expected-baggage input in the synthesis.
   const head=fluxRow(synth,synth.getElementsByTagNameNS(fluxNS,'sheetData')[0],5);
   for(let j=8;j<22;j++)fluxCell(synth,head,j,j===8?selectedCompany:'');
