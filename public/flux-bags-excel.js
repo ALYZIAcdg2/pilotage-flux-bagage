@@ -399,6 +399,24 @@ export async function exportFluxExcel({dataset,metadata={},period,from,to,compan
  for(const v of Array.from(dvs.children))if(v.getAttribute('sqref')==='C5')dvs.removeChild(v);
  const dv=daySheet.createElementNS(fluxNS,'dataValidation');dv.setAttribute('type','list');dv.setAttribute('allowBlank','0');dv.setAttribute('showDropDown','0');dv.setAttribute('sqref','C5');
  const f=daySheet.createElementNS(fluxNS,'formula1');f.textContent='$AA$5:$AA'+(4+Math.max(1,dateOptions.length));dv.appendChild(f);dvs.appendChild(dv);dvs.setAttribute('count',String(dvs.children.length));
+ // Final visibility pass: Excel must show row 9 (EI) and its I9 note.
+ // Explicitly restore visibility AFTER all template-specific row manipulation.
+ if(selectedCompany){
+  const data=daySheet.getElementsByTagNameNS(fluxNS,'sheetData')[0];
+  const airlineRow=fluxRow(daySheet,data,9);
+  for(const key of ['hidden','collapsed','outlineLevel','thickTop','thickBot'])airlineRow.removeAttribute(key);
+  airlineRow.setAttribute('ht','26');airlineRow.setAttribute('customHeight','1');
+  fluxCell(daySheet,airlineRow,0,selectedCompany);
+  // I9 is the permanent guidance cell in the original template; preserve it.
+  const note=Array.from(airlineRow.children).find(x=>x.getAttribute('r')==='I9');
+  if(note&&note.getAttribute('t')==='inlineStr')note.removeAttribute('hidden');
+  // Unhide the row at the worksheet level even when Excel inherited an outline group.
+  const format=daySheet.getElementsByTagNameNS(fluxNS,'sheetFormatPr')[0];
+  if(format)format.removeAttribute('zeroHeight');
+  for(let i=10;i<=22;i++){
+   const row=fluxRow(daySheet,data,i);row.setAttribute('hidden','1');row.removeAttribute('outlineLevel');row.removeAttribute('collapsed');
+  }
+ }
  zip.file('xl/worksheets/sheet3.xml',serializer.serializeToString(daySheet));
  zip.file('xl/worksheets/sheet1.xml',serializer.serializeToString(recap));
  zip.file('xl/worksheets/sheet4.xml',serializer.serializeToString(synth));
