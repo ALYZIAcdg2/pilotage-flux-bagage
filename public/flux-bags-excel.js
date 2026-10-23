@@ -576,6 +576,19 @@ export async function exportFluxExcel({dataset,metadata={},period,from,to,compan
    }
   }
  }
+ // The duplicate-TAG table uses INDEX formulas (B113:B...) with no cached <v>.
+ // Apply the date style to formula cells themselves, not only numeric cached values.
+ {
+  const rows=Array.from(recap.getElementsByTagNameNS(fluxNS,'sheetData')[0].children).filter(n=>n.localName==='row');
+  for(const row of rows){
+   const n=Number(row.getAttribute('r'));
+   if(n<113)continue;
+   const cell=Array.from(row.children).find(x=>x.localName==='c'&&x.getAttribute('r')==='B'+n);
+   if(!cell)continue;
+   const formula=Array.from(cell.children).find(x=>x.localName==='f');
+   if(formula&&formula.textContent.includes('BASE!$A$6:$A$1740'))cell.setAttribute('s',String(dateStyleIndex));
+  }
+ }
  // Open at A1 on every worksheet, not at the last saved template scroll position.
  for(const file of ['xl/worksheets/sheet1.xml','xl/worksheets/sheet2.xml','xl/worksheets/sheet3.xml','xl/worksheets/sheet4.xml','xl/worksheets/sheet5.xml']){
   const doc=file.endsWith('sheet1.xml')?recap:file.endsWith('sheet2.xml')?dossier:file.endsWith('sheet3.xml')?daySheet:file.endsWith('sheet4.xml')?synth:base;
