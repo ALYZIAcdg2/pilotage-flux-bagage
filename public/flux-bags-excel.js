@@ -551,6 +551,31 @@ export async function exportFluxExcel({dataset,metadata={},period,from,to,compan
    zip.file(file,serializer.serializeToString(chartDoc));
   }
  }
+ // Avoid displaying a floating 'ANNULÉS 0%' label on a 100% saved donut.
+ {
+  const file='xl/charts/chart2.xml';
+  if(zip.file(file)){
+   const chart=parser.parseFromString(await zip.file(file).async('string'),'application/xml');
+   const ns='http://schemas.openxmlformats.org/drawingml/2006/chart';
+   const donuts=Array.from(chart.getElementsByTagNameNS(ns,'doughnutChart'));
+   const labels=donuts.length?Array.from(donuts[0].children).find(n=>n.localName==='dLbls'):null;
+   if(labels){
+    const labelsToHide=selectedCompany?[
+     ['saved',stats.get(selectedCompany)?.saved||0],['loaded',stats.get(selectedCompany)?.loaded||0],
+     ['notLoaded',stats.get(selectedCompany)?.notLoaded||0],['cancelled',stats.get(selectedCompany)?.cancelled||0]
+    ]:[];
+    for(let i=0;i<labelsToHide.length;i++)if(labelsToHide[i][1]===0){
+     const item=chart.createElementNS(ns,'c:dLbl');
+     const idx=chart.createElementNS(ns,'c:idx');idx.setAttribute('val',String(i));item.appendChild(idx);
+     for(const name of ['showLegendKey','showVal','showCatName','showSerName','showPercent']){
+      const flag=chart.createElementNS(ns,'c:'+name);flag.setAttribute('val','0');item.appendChild(flag);
+     }
+     labels.insertBefore(item,labels.firstChild);
+    }
+   }
+   zip.file(file,serializer.serializeToString(chart));
+  }
+ }
  // Clear stale chart caches from the original all-airlines workbook. Excel will
  // rebuild each chart from the company-filtered sheet data on opening.
  if(selectedCompany){
