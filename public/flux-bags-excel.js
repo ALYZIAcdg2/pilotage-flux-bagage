@@ -278,6 +278,28 @@ export async function exportFluxExcel({dataset,metadata={},period,from,to,compan
    for(let j=27;j<=30;j++)fluxCell(recap,helper,j,'');
   }
  }
+ if(selectedCompany){
+  // Row 3 is the visible subtitle on the official template, not row 1.
+  const periodLabel=period==='month'?new Date(from+'T12:00:00').toLocaleDateString('fr-FR',{month:'long',year:'numeric'}).toUpperCase():period==='year'?from.slice(0,4):period==='day'?fluxDate(from):fluxDate(from)+' AU '+fluxDate(to);
+  const subtitle='COMPTE RENDU DE SUPERVISION  •  '+periodLabel+'  •  '+companyTitle;
+  for(const doc of [recap,dossier,daySheet,synth,base]){
+   fluxCell(doc,fluxRow(doc,doc.getElementsByTagNameNS(fluxNS,'sheetData')[0],3),0,subtitle);
+  }
+  // The chart's categories start at AA13, so keep one single series category.
+  const header=fluxRow(recap,recap.getElementsByTagNameNS(fluxNS,'sheetData')[0],13);
+  fluxCell(recap,header,26,selectedCompany);
+  for(let j=27;j<=30;j++)fluxCell(recap,header,j,0);
+  for(let i=0;i<14;i++){
+   const rr=fluxRow(recap,recap.getElementsByTagNameNS(fluxNS,'sheetData')[0],14+i);
+   for(let j=26;j<=30;j++)fluxCell(recap,rr,j,'');
+   if(i>0)rr.setAttribute('hidden','1');else rr.removeAttribute('hidden');
+   const dr=fluxRow(daySheet,daySheet.getElementsByTagNameNS(fluxNS,'sheetData')[0],9+i);
+   if(i>0)dr.setAttribute('hidden','1');else dr.removeAttribute('hidden');
+  }
+  // Keep only the selected airline's expected-baggage input in the synthesis.
+  const head=fluxRow(synth,synth.getElementsByTagNameNS(fluxNS,'sheetData')[0],5);
+  for(let j=8;j<22;j++)fluxCell(synth,head,j,j===8?selectedCompany:'');
+ }
  const templateCodes=Array.from({length:14},(_,i)=>cellText(recap,'A'+(14+i)).trim().toUpperCase()).filter(Boolean);
  const airlines=selectedCompany?[selectedCompany]:[...new Set([...templateCodes,...allCodes])].filter(code=>allCodes.has(code));
  if(airlines.length>14)throw new Error('Le modèle officiel permet 14 compagnies maximum ('+airlines.length+' sélectionnées).');
@@ -285,7 +307,7 @@ export async function exportFluxExcel({dataset,metadata={},period,from,to,compan
   const row=fluxRow(recap,recap.getElementsByTagNameNS(fluxNS,'sheetData')[0],14+i);
   fluxCell(recap,row,0,airlines[i]||'');
   fluxCell(recap,row,3,expectedByAirline.get(airlines[i])||0);
-  if(selectedCompany&&i===0)fluxCell(recap,row,26,selectedCompany);
+  // Chart categories are maintained in row 13, not duplicated here.
  }
  for(let i=0;i<31;i++){
   const d=dates[i],row=fluxRow(synth,synth.getElementsByTagNameNS(fluxNS,'sheetData')[0],6+i);
@@ -293,7 +315,7 @@ export async function exportFluxExcel({dataset,metadata={},period,from,to,compan
   setExcelDate(synth,row,0,d);
   for(let col=8;col<22;col++){
    const code=cellText(synth,fluxColumnName(col)+'5').trim().toUpperCase();
-   fluxCell(synth,row,col,d?(expectedByDate.get(d)?.get(code)??0):'');
+   fluxCell(synth,row,col,selectedCompany&&col>8?'':d?(expectedByDate.get(d)?.get(code)??0):'');
   }
   // Keep all other existing formula cells, only update expected count input if it is not a formula.
   const expectedCell=Array.from(row.children).find(c=>c.getAttribute('r')==='D'+(6+i));
@@ -335,6 +357,20 @@ export async function exportFluxExcel({dataset,metadata={},period,from,to,compan
  if(relRaw){const relDoc=parser.parseFromString(relRaw,'application/xml');for(const el of Array.from(relDoc.documentElement.children))if((el.getAttribute('Type')||'').endsWith('/calcChain'))el.remove();zip.file(relPath,serializer.serializeToString(relDoc));}
  const typesRaw=await zip.file('[Content_Types].xml')?.async('string');
  if(typesRaw){const typesDoc=parser.parseFromString(typesRaw,'application/xml');for(const el of Array.from(typesDoc.documentElement.children))if(el.getAttribute('PartName')==='/xl/calcChain.xml')el.remove();zip.file('[Content_Types].xml',serializer.serializeToString(typesDoc));}
+ // The date chart uses Excel serial dates; show actual dates instead of 46266 etc.
+ if(selectedCompany){
+  const file='xl/charts/chart3.xml';
+  if(zip.file(file)){
+   const chartDoc=parser.parseFromString(await zip.file(file).async('string'),'application/xml');
+   const chartNS='http://schemas.openxmlformats.org/drawingml/2006/chart';
+   for(const axis of Array.from(chartDoc.getElementsByTagNameNS(chartNS,'catAx'))){
+    let fmt=Array.from(axis.children).find(x=>x.localName==='numFmt');
+    if(!fmt){fmt=chartDoc.createElementNS(chartNS,'c:numFmt');axis.appendChild(fmt);}
+    fmt.setAttribute('formatCode','dd/mm');fmt.setAttribute('sourceLinked','0');
+   }
+   zip.file(file,serializer.serializeToString(chartDoc));
+  }
+ }
  // Clear stale chart caches from the original all-airlines workbook. Excel will
  // rebuild each chart from the company-filtered sheet data on opening.
  if(selectedCompany){
