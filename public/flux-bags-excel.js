@@ -196,7 +196,7 @@ export async function exportFluxExcel({dataset,metadata={},period,from,to,compan
  const {dates,entries}=fluxRows({dataset,period,from,to,company});
  if(entries.length>1735)throw new Error('Le modèle officiel contient 1 735 lignes de dossiers maximum. Export annulé pour éviter toute perte de données ('+entries.length+' dossiers).');
  const JSZip=await fluxLoadZip();
- const response=await fetch('/ALYZIA_FLUX_BAGAGES.xlsx?v=official-20261019',{cache:'no-store'});
+ const response=await fetch('/ALYZIA_FLUX_BAGAGES.xlsx.xlsx?v=validated-20261023',{cache:'no-store'});
  if(!response.ok)throw new Error('Modèle officiel introuvable sur le serveur (HTTP '+response.status+')');
  const zip=await JSZip.loadAsync(await response.arrayBuffer());
  const parser=new DOMParser(),serializer=new XMLSerializer();
