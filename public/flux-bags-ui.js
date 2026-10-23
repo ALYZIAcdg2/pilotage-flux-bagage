@@ -74,7 +74,10 @@ function openDeletionAudit(){
  $('deletionAuditList').innerHTML=items.length?items.map(item=>'<div class="history-entry"><strong>'+esc(item.at?new Date(item.at).toLocaleString('fr-FR'):'')+'</strong> · <b>USER '+esc(item.user||'Non renseigné')+'</b> · '+esc(item.airline||'')+' / '+esc(item.tagNumber||'')+' · '+esc(displayDate(item.date||''))+'</div>').join(''):'<p>Aucune suppression enregistrée dans le nouvel historique.</p>';
  $('deletionAuditDialog').showModal();
 }
-$('deletionAuditButton').onclick=openDeletionAudit;
+const closeToolsMenu=()=>{const menu=$('toolsMenu');if(menu)menu.open=false;};
+$('openImport').onclick=()=>{closeToolsMenu();const frame=$('importFrame');if(!frame.getAttribute('src'))frame.src='/flux-bags-import.html?embedded=1';$('importDialog').showModal();};
+$('importClose').onclick=()=>{$('importDialog').close();};
+$('deletionAuditButton').onclick=()=>{closeToolsMenu();openDeletionAudit();};
 $('deletionAuditClose').onclick=()=>$('deletionAuditDialog').close();
 function auditEvent(action,changes=[]){return {at:new Date().toISOString(),user:sessionUser,action,changes};}
 
@@ -760,14 +763,14 @@ function updateExcelPeriod(){
  $('excelToLabel').hidden=period!=='range';to.disabled=period!=='range';
  $('excelFromLabel').firstChild.textContent=period==='month'?'Mois':period==='day'?'Jour':'Du';
 }
-$('export').onclick=openExcelExport;
+$('export').onclick=()=>{closeToolsMenu();openExcelExport();};
 $('excelPeriod').onchange=updateExcelPeriod;
 $('excelClose').onclick=()=>$('excelDialog').close();
 $('excelDownload').onclick=async()=>{
  const period=$('excelPeriod').value,from=$('excelFrom').value,to=$('excelTo').value,company=$('excelAirline').value;
  if(!from||(period==='range'&&(!to||to<from))){$('excelStatus').textContent='Vérifiez les dates sélectionnées.';return;}
  const btn=$('excelDownload');btn.disabled=true;$('excelStatus').textContent='Création du fichier Excel en cours…';
- try{const {exportFluxExcel}=await import('/flux-bags-excel.js?v=company-scoped-20261023');const result=await exportFluxExcel({dataset,metadata,period,from,to,company});$('excelStatus').textContent='Fichier créé : '+result.name+' · '+result.dossiers+' dossiers.';}
+ try{const {exportFluxExcel}=await import('/flux-bags-excel.js?v=company-scoped-20261023');const result=await exportFluxExcel({dataset,metadata,period,from,to,company});$('excelStatus').textContent='Fichier créé : '+result.name+' · '+result.dossiers+' dossiers.';$('excelDialog').close();}
  catch(e){$('excelStatus').textContent='Erreur export Excel : '+e.message;}
  finally{btn.disabled=false;}
 };
