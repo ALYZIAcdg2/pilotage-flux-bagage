@@ -576,28 +576,25 @@ export async function exportFluxExcel({dataset,metadata={},period,from,to,compan
    }
   }
  }
- // The duplicate-TAG table uses INDEX formulas (B113:B...) with no cached <v>.
- // Apply the date style to formula cells themselves, not only numeric cached values.
+ // Duplicate-TAG dates: reuse one valid centered date style for formula cells.
+ // IMPORTANT: serialize the updated styles.xml before generating the XLSX.
  {
+  const centered=xfs.children[dateStyleIndex].cloneNode(true);
+  centered.setAttribute('applyAlignment','1');
+  let alignment=Array.from(centered.children).find(x=>x.localName==='alignment');
+  if(!alignment){alignment=styles.createElementNS(fluxNS,'alignment');centered.appendChild(alignment);}
+  alignment.setAttribute('horizontal','center');alignment.setAttribute('vertical','center');
+  const centeredDateStyleIndex=xfs.children.length;
+  xfs.appendChild(centered);xfs.setAttribute('count',String(xfs.children.length));
   const rows=Array.from(recap.getElementsByTagNameNS(fluxNS,'sheetData')[0].children).filter(n=>n.localName==='row');
   for(const row of rows){
-   const n=Number(row.getAttribute('r'));
-   if(n<113)continue;
+   const n=Number(row.getAttribute('r'));if(n<113)continue;
    const cell=Array.from(row.children).find(x=>x.localName==='c'&&x.getAttribute('r')==='B'+n);
    if(!cell)continue;
    const formula=Array.from(cell.children).find(x=>x.localName==='f');
-   if(formula&&formula.textContent.includes('BASE!$A$6:$A$1740')){
-    const baseDateXf=xfs.children[dateStyleIndex];
-    if(baseDateXf){
-     const centered=baseDateXf.cloneNode(true);centered.setAttribute('applyAlignment','1');
-     let alignment=Array.from(centered.children).find(x=>x.localName==='alignment');
-     if(!alignment){alignment=styles.createElementNS(fluxNS,'alignment');centered.appendChild(alignment);}
-     alignment.setAttribute('horizontal','center');alignment.setAttribute('vertical','center');
-     xfs.appendChild(centered);xfs.setAttribute('count',String(xfs.children.length));
-     cell.setAttribute('s',String(xfs.children.length-1));
-    }
-   }
+   if(formula&&formula.textContent.includes('BASE!$A$6:$A$1740'))cell.setAttribute('s',String(centeredDateStyleIndex));
   }
+  zip.file('xl/styles.xml',serializer.serializeToString(styles));
  }
  // Open at A1 on every worksheet, not at the last saved template scroll position.
  for(const file of ['xl/worksheets/sheet1.xml','xl/worksheets/sheet2.xml','xl/worksheets/sheet3.xml','xl/worksheets/sheet4.xml','xl/worksheets/sheet5.xml']){
