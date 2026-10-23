@@ -693,6 +693,42 @@ export async function exportFluxExcel({dataset,metadata={},period,from,to,compan
   const data=recap.getElementsByTagNameNS(fluxNS,'sheetData')[0];
   const row=fluxRow(recap,data,13);row.setAttribute('ht','36');row.setAttribute('customHeight','1');
  }
+ // Presentation rules for filtered exports.
+ {
+  // Column I mirrors the daily expected-baggage total in D whenever A is dated.
+  const data=synth.getElementsByTagNameNS(fluxNS,'sheetData')[0];
+  for(let i=0;i<Math.min(dates.length,31);i++){
+   const row=fluxRow(synth,data,6+i),cellRef='I'+(6+i);
+   fluxCell(synth,row,8,0);
+   const cell=Array.from(row.children).find(n=>n.getAttribute('r')===cellRef);
+   for(const n of Array.from(cell.children).filter(n=>n.localName==='v'))cell.removeChild(n);
+   const f=synth.createElementNS(fluxNS,'f');f.textContent='IF(A'+(6+i)+'="",0,D'+(6+i)+')';cell.insertBefore(f,cell.firstChild);
+  }
+  const totalAt=6+Math.min(dates.length,31),row=fluxRow(synth,data,totalAt);
+  fluxCell(synth,row,8,0);
+  const totalCell=Array.from(row.children).find(n=>n.getAttribute('r')==='I'+totalAt);
+  for(const n of Array.from(totalCell.children).filter(n=>n.localName==='v'))totalCell.removeChild(n);
+  const totalFormula=synth.createElementNS(fluxNS,'f');totalFormula.textContent='SUM(I6:I'+(totalAt-1)+')';totalCell.insertBefore(totalFormula,totalCell.firstChild);
+  const style=Array.from(row.children).find(n=>n.getAttribute('r')==='H'+totalAt)?.getAttribute('s');
+  if(style!==null&&style!==undefined)totalCell.setAttribute('s',style);
+  // Disable wrapping on H13 without changing its background or text.
+  const header=fluxRow(recap,recap.getElementsByTagNameNS(fluxNS,'sheetData')[0],13);
+  const h13=Array.from(header.children).find(n=>n.getAttribute('r')==='H13');
+  if(h13){
+   const stylesDoc=parser.parseFromString(await zip.file('xl/styles.xml').async('string'),'application/xml');
+   const xfs=stylesDoc.getElementsByTagNameNS(fluxNS,'cellXfs')[0];
+   const base=Array.from(xfs.children)[Number(h13.getAttribute('s'))||0];
+   if(base){
+    const clone=base.cloneNode(true);clone.setAttribute('applyAlignment','1');
+    let align=Array.from(clone.children).find(n=>n.localName==='alignment');
+    if(!align){align=stylesDoc.createElementNS(fluxNS,'alignment');clone.appendChild(align);}
+    align.setAttribute('wrapText','0');align.setAttribute('horizontal','center');align.setAttribute('vertical','center');
+    xfs.appendChild(clone);xfs.setAttribute('count',String(xfs.children.length));
+    h13.setAttribute('s',String(xfs.children.length-1));
+    zip.file('xl/styles.xml',serializer.serializeToString(stylesDoc));
+   }
+  }
+ }
  // Clear stale chart caches from the original all-airlines workbook. Excel will
  // rebuild each chart from the company-filtered sheet data on opening.
  if(selectedCompany){
