@@ -655,6 +655,20 @@ export async function exportFluxExcel({dataset,metadata={},period,from,to,compan
    zip.file(file,serializer.serializeToString(chart));
   }
  }
+ // Hide overlapping donut data labels; the legend and numeric recap table remain.
+ if(zip.file('xl/charts/chart2.xml')){
+  const doc=parser.parseFromString(await zip.file('xl/charts/chart2.xml').async('string'),'application/xml');
+  const ns='http://schemas.openxmlformats.org/drawingml/2006/chart';
+  for(const donut of Array.from(doc.getElementsByTagNameNS(ns,'doughnutChart'))){
+   let labels=Array.from(donut.children).find(n=>n.localName==='dLbls');
+   if(!labels){labels=doc.createElementNS(ns,'c:dLbls');donut.appendChild(labels);}
+   for(const child of Array.from(labels.children))labels.removeChild(child);
+   for(const name of ['showLegendKey','showVal','showCatName','showSerName','showPercent']){
+    const flag=doc.createElementNS(ns,'c:'+name);flag.setAttribute('val','0');labels.appendChild(flag);
+   }
+  }
+  zip.file('xl/charts/chart2.xml',serializer.serializeToString(doc));
+ }
  // Clear stale chart caches from the original all-airlines workbook. Excel will
  // rebuild each chart from the company-filtered sheet data on opening.
  if(selectedCompany){
