@@ -380,8 +380,8 @@ export async function exportFluxExcel({dataset,metadata={},period,from,to,compan
    // Preserve formula cells and update only operational expected values.
   setExcelDate(synth,row,0,d);
   for(let col=8;col<22;col++){
-   const code=cellText(synth,fluxColumnName(col)+'5').trim().toUpperCase();
-   fluxCell(synth,row,col,selectedCompany&&col>8?'':d?(expectedByDate.get(d)?.get(code)??0):'');
+   const code=selectedCompany?(col===8?selectedCompany:''):cellText(synth,fluxColumnName(col)+'5').trim().toUpperCase();
+   fluxCell(synth,row,col,selectedCompany&&col>8?'':d?(expectedByDate.get(d)?.get(code)??''):'');
   }
   // Keep all other existing formula cells, only update expected count input if it is not a formula.
   const expectedCell=Array.from(row.children).find(c=>c.getAttribute('r')==='D'+(6+i));
@@ -455,6 +455,36 @@ export async function exportFluxExcel({dataset,metadata={},period,from,to,compan
    if(/^I9(?::[A-Z]+\\d+)?$/.test(ref)){
     const match=ref.match(/^I9(?::([A-Z]+)(\\d+))?$/);
     merge.setAttribute('ref',match&&match[1]?'I8:'+match[1]+(Number(match[2])-1):'I8');
+   }
+  }
+ }
+ // Final presentation corrections for the official workbook.
+ {
+  // I8:M8 is one centered guidance area; keep the note in its anchor I8.
+  const merges=daySheet.getElementsByTagNameNS(fluxNS,'mergeCells')[0];
+  if(merges){
+   for(const node of Array.from(merges.children)){
+    const ref=node.getAttribute('ref')||'';
+    if(/^I8(?::[A-Z]+8)?$/.test(ref))merges.removeChild(node);
+   }
+   const merged=daySheet.createElementNS(fluxNS,'mergeCell');merged.setAttribute('ref','I8:M8');merges.appendChild(merged);merges.setAttribute('count',String(merges.children.length));
+  }
+  const i8=Array.from(fluxRow(daySheet,daySheet.getElementsByTagNameNS(fluxNS,'sheetData')[0],8).children).find(n=>n.getAttribute('r')==='I8');
+  if(i8){i8.setAttribute('s',String(dossierStyleIndex));}
+  // Center synthesis values and dates without changing the formulas or numbers.
+  const synthData=synth.getElementsByTagNameNS(fluxNS,'sheetData')[0];
+  for(const row of Array.from(synthData.children).filter(n=>n.localName==='row'&&Number(n.getAttribute('r'))>=6&&Number(n.getAttribute('r'))<=36)){
+   const dateValue=Array.from(row.children).find(n=>n.getAttribute('r')==='A'+row.getAttribute('r'));
+   if(dateValue)dateValue.setAttribute('s',String(dossierDateStyleIndex));
+   for(const cell of Array.from(row.children).filter(n=>n.localName==='c')){
+    if(cell===dateValue)continue;
+    const formula=Array.from(cell.children).find(n=>n.localName==='f');
+    const value=Array.from(cell.children).find(n=>n.localName==='v');
+    if(!formula&&value&&value.textContent==='0'){
+     // Zero expected-baggage inputs are empty, not visible zeroes.
+     if(fluxColumn(cell.getAttribute('r'))>=8)value.parentNode.removeChild(value);
+    }
+    cell.setAttribute('s',String(dossierStyleIndex));
    }
   }
  }
