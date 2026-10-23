@@ -310,7 +310,7 @@ export async function exportFluxExcel({dataset,metadata={},period,from,to,compan
    for(let j=26;j<=30;j++)fluxCell(recap,rr,j,'');
    if(i>0)rr.setAttribute('hidden','1');else rr.removeAttribute('hidden');
    const dr=fluxRow(daySheet,daySheet.getElementsByTagNameNS(fluxNS,'sheetData')[0],9+i);
-   if(i>0)dr.setAttribute('hidden','1');else {dr.removeAttribute('hidden');dr.removeAttribute('outlineLevel');dr.removeAttribute('collapsed');}
+   dr.removeAttribute('hidden');dr.removeAttribute('outlineLevel');dr.removeAttribute('collapsed');
   }
   // Keep the selected airline visible: the template groups rows 9:22.
   const selectedDayRow=fluxRow(daySheet,daySheet.getElementsByTagNameNS(fluxNS,'sheetData')[0],9);
@@ -414,7 +414,7 @@ export async function exportFluxExcel({dataset,metadata={},period,from,to,compan
   const format=daySheet.getElementsByTagNameNS(fluxNS,'sheetFormatPr')[0];
   if(format)format.removeAttribute('zeroHeight');
   for(let i=10;i<=22;i++){
-   const row=fluxRow(daySheet,data,i);row.setAttribute('hidden','1');row.removeAttribute('outlineLevel');row.removeAttribute('collapsed');
+   const row=fluxRow(daySheet,data,i);row.removeAttribute('hidden');row.removeAttribute('outlineLevel');row.removeAttribute('collapsed');
   }
  }
  // Final daily layout: no hidden airline rows, and TOTAL immediately follows the airlines.
@@ -487,6 +487,19 @@ export async function exportFluxExcel({dataset,metadata={},period,from,to,compan
     cell.setAttribute('s',String(dossierStyleIndex));
    }
   }
+ }
+ // Never export a hidden day-by-day row. For a single airline, unused rows
+ // have already been physically removed above, not hidden.
+ {
+  const data=daySheet.getElementsByTagNameNS(fluxNS,'sheetData')[0];
+  for(const row of Array.from(data.children).filter(n=>n.localName==='row')){
+   row.removeAttribute('hidden');row.removeAttribute('collapsed');row.removeAttribute('outlineLevel');
+   if(Number(row.getAttribute('r'))>=9&&Number(row.getAttribute('r'))<=23){
+    row.setAttribute('ht','24');row.setAttribute('customHeight','1');
+   }
+  }
+  const fmt=daySheet.getElementsByTagNameNS(fluxNS,'sheetFormatPr')[0];
+  if(fmt)fmt.removeAttribute('zeroHeight');
  }
  // Open at A1 on every worksheet, not at the last saved template scroll position.
  for(const file of ['xl/worksheets/sheet1.xml','xl/worksheets/sheet2.xml','xl/worksheets/sheet3.xml','xl/worksheets/sheet4.xml','xl/worksheets/sheet5.xml']){
