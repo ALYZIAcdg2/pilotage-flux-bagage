@@ -729,6 +729,34 @@ export async function exportFluxExcel({dataset,metadata={},period,from,to,compan
    }
   }
  }
+ // Status chart: show spaced outside labels for nonzero slices only.
+ // Daily evolution: exclude the synthesis TOTAL row from every source range.
+ for(const file of Object.keys(zip.files).filter(name=>/^xl\\/charts\\/chart\\d+\\.xml$/.test(name))){
+  const doc=parser.parseFromString(await zip.file(file).async('string'),'application/xml');
+  const ns='http://schemas.openxmlformats.org/drawingml/2006/chart';
+  let changed=false;
+  for(const donut of Array.from(doc.getElementsByTagNameNS(ns,'doughnutChart'))){
+   for(const labels of Array.from(donut.children).filter(n=>n.localName==='dLbls'))donut.removeChild(labels);
+   const labels=doc.createElementNS(ns,'c:dLbls');
+   const pos=doc.createElementNS(ns,'c:dLblPos');pos.setAttribute('val','outEnd');labels.appendChild(pos);
+   for(const key of ['showLegendKey','showVal','showCatName','showSerName','showPercent']){
+    const node=doc.createElementNS(ns,'c:'+key);node.setAttribute('val',key==='showCatName'||key==='showPercent'?'1':'0');labels.appendChild(node);
+   }
+   const leader=doc.createElementNS(ns,'c:showLeaderLines');leader.setAttribute('val','1');labels.appendChild(leader);
+   donut.appendChild(labels);changed=true;
+  }
+  // The chart's date axis must stop at the last dated synthesis row.
+  const lastDateRow=5+Math.min(dates.length,31);
+  for(const line of Array.from(doc.getElementsByTagNameNS(ns,'lineChart'))){
+   for(const f of Array.from(line.getElementsByTagNameNS(ns,'f'))){
+    const val=f.textContent||'';
+    if(/SYNTHÈSE PAR DATE/i.test(val)&&/\\$?[A-Z]+\\$?6:\\$?[A-Z]+\\$?\\d+/.test(val)){
+     f.textContent=val.replace(/(\\$?[A-Z]+\\$?6:\\$?[A-Z]+\\$?)\\d+/g,'$1'+lastDateRow);changed=true;
+    }
+   }
+  }
+  if(changed)zip.file(file,serializer.serializeToString(doc));
+ }
  // Clear stale chart caches from the original all-airlines workbook. Excel will
  // rebuild each chart from the company-filtered sheet data on opening.
  if(selectedCompany){
