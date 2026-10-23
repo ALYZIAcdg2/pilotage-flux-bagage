@@ -671,7 +671,7 @@ export async function exportFluxExcel({dataset,metadata={},period,from,to,compan
  }
  // The status doughnut may be chart1.xml rather than chart2.xml.
  // Remove every per-point data label as well as global labels, on every doughnut chart.
- for(const file of Object.keys(zip.files).filter(name=>/^xl\\/charts\\/chart\\d+\\.xml$/.test(name))){
+ for(const file of Object.keys(zip.files).filter(name=>/^xl\/charts\/chart\d+\.xml$/.test(name))){
   const doc=parser.parseFromString(await zip.file(file).async('string'),'application/xml');
   const ns='http://schemas.openxmlformats.org/drawingml/2006/chart';
   let changed=false;
