@@ -207,6 +207,17 @@ export async function exportFluxExcel({dataset,metadata={},period,from,to,compan
  const fmt=styles.createElementNS(fluxNS,'numFmt');fmt.setAttribute('numFmtId','180');fmt.setAttribute('formatCode','dd/mm/yyyy');numFmts.appendChild(fmt);numFmts.setAttribute('count',String(numFmts.children.length));
  const xfs=styles.getElementsByTagNameNS(fluxNS,'cellXfs')[0];if(!xfs)throw new Error('Styles Excel manquants');
  const dateStyleIndex=xfs.children.length;const xf=xfs.children[0].cloneNode(true);xf.setAttribute('numFmtId','180');xf.setAttribute('applyNumberFormat','1');xfs.appendChild(xf);xfs.setAttribute('count',String(xfs.children.length));zip.file('xl/styles.xml',serializer.serializeToString(styles));
+ // Dedicated cell style for exported dossiers: centered in both directions, wrapped.
+ const dossierStyleIndex=xfs.children.length;
+ const dossierXf=xfs.children[0].cloneNode(true);
+ dossierXf.setAttribute('applyAlignment','1');
+ let dossierAlignment=Array.from(dossierXf.children).find(x=>x.localName==='alignment');
+ if(!dossierAlignment){dossierAlignment=styles.createElementNS(fluxNS,'alignment');dossierXf.appendChild(dossierAlignment);}
+ dossierAlignment.setAttribute('horizontal','center');dossierAlignment.setAttribute('vertical','center');dossierAlignment.setAttribute('wrapText','1');
+ xfs.appendChild(dossierXf);xfs.setAttribute('count',String(xfs.children.length));
+ const dossierDateStyleIndex=xfs.children.length;
+ const dossierDateXf=dossierXf.cloneNode(true);dossierDateXf.setAttribute('numFmtId','180');dossierDateXf.setAttribute('applyNumberFormat','1');xfs.appendChild(dossierDateXf);xfs.setAttribute('count',String(xfs.children.length));
+ zip.file('xl/styles.xml',serializer.serializeToString(styles));
  const setExcelDate=(doc,row,col,d)=>{fluxCell(doc,row,col,d?dateSerial(d):'');const ref=fluxColumnName(col)+row.getAttribute('r');const cell=Array.from(row.children).find(x=>x.getAttribute('r')===ref);if(cell&&d)cell.setAttribute('s',String(dateStyleIndex));};
  const dossier=await load('xl/worksheets/sheet2.xml'),base=await load('xl/worksheets/sheet5.xml');
  const stats=new Map(),daily=new Map();
@@ -220,7 +231,10 @@ export async function exportFluxExcel({dataset,metadata={},period,from,to,compan
    const key=statusKey(r);if(!stats.has(cie))stats.set(cie,blank());for(const m of [stats.get(cie),daily.get(e.date)]){m.total++;m[key]++;}
   }
   fluxWriteCells(dossier,6+i,values);fluxWriteCells(base,6+i,values);
-  if(e){for(const doc of [dossier,base]){const rr=fluxRow(doc,doc.getElementsByTagNameNS(fluxNS,'sheetData')[0],6+i);setExcelDate(doc,rr,0,e.date);}}
+  const dossierRow=fluxRow(dossier,dossier.getElementsByTagNameNS(fluxNS,'sheetData')[0],6+i);
+  dossierRow.setAttribute('ht',e?'36':'22');dossierRow.setAttribute('customHeight','1');
+  for(const cell of Array.from(dossierRow.children).filter(x=>x.localName==='c'))cell.setAttribute('s',String(dossierStyleIndex));
+  if(e){for(const doc of [dossier,base]){const rr=fluxRow(doc,doc.getElementsByTagNameNS(fluxNS,'sheetData')[0],6+i);setExcelDate(doc,rr,0,e.date);if(doc===dossier){const dateCell=Array.from(rr.children).find(x=>x.getAttribute('r')==='A'+(6+i));if(dateCell)dateCell.setAttribute('s',String(dossierDateStyleIndex));}}}
  }
  // Expected baggage counts are independent user-entered KPI values, not dossier counts.
  const expectedByDate=new Map(),expectedByAirline=new Map();
@@ -307,6 +321,39 @@ export async function exportFluxExcel({dataset,metadata={},period,from,to,compan
   const dayTotal=fluxRow(daySheet,daySheet.getElementsByTagNameNS(fluxNS,'sheetData')[0],23);
   dayTotal.removeAttribute('hidden');dayTotal.removeAttribute('collapsed');dayTotal.removeAttribute('outlineLevel');
   // Do not overwrite the B:G daily formulas: they recalculate when C5 changes.
+  // Build a single visible, formula-driven airline row; the original template
+  // had fixed formulas and row groups that did not reliably unhide in Excel.
+  const dayData=daySheet.getElementsByTagNameNS(fluxNS,'sheetData')[0];
+  const visibleDayRow=fluxRow(daySheet,dayData,9);
+  visibleDayRow.removeAttribute('hidden');visibleDayRow.removeAttribute('collapsed');visibleDayRow.removeAttribute('outlineLevel');
+  visibleDayRow.setAttribute('ht','25');visibleDayRow.setAttribute('customHeight','1');
+  fluxCell(daySheet,visibleDayRow,0,selectedCompany);
+  const expectedFormula="IFERROR(INDEX('SYNTHÈSE PAR DATE'!$I$6:$I$36,MATCH($C$5,'SYNTHÈSE PAR DATE'!$A$6:$A$36,0)),0)";
+  const dayFormulas=[expectedFormula,
+   'COUNTIFS(BASE!$A$6:$A$1740,$C$5,BASE!$B$6:$B$1740,$A9)',
+   'COUNTIFS(BASE!$A$6:$A$1740,$C$5,BASE!$B$6:$B$1740,$A9,BASE!$M$6:$M$1740,"SAUVÉ")',
+   'COUNTIFS(BASE!$A$6:$A$1740,$C$5,BASE!$B$6:$B$1740,$A9,BASE!$M$6:$M$1740,"CHARGÉ")',
+   'COUNTIFS(BASE!$A$6:$A$1740,$C$5,BASE!$B$6:$B$1740,$A9,BASE!$M$6:$M$1740,"NON CHARGÉ")',
+   'COUNTIFS(BASE!$A$6:$A$1740,$C$5,BASE!$B$6:$B$1740,$A9,BASE!$M$6:$M$1740,"ANNULÉ")'];
+  for(let i=0;i<6;i++){
+   const col=i+1;fluxCell(daySheet,visibleDayRow,col,0);
+   const cell=Array.from(visibleDayRow.children).find(x=>x.getAttribute('r')===fluxColumnName(col)+'9');
+   const oldValue=Array.from(cell.children).find(x=>x.localName==='v');if(oldValue)cell.removeChild(oldValue);
+   const formula=daySheet.createElementNS(fluxNS,'f');formula.textContent=dayFormulas[i];cell.insertBefore(formula,cell.firstChild);
+  }
+  // Total is always the same as the single selected airline, not the hidden template rows.
+  const totalRow=fluxRow(daySheet,dayData,23);
+  totalRow.removeAttribute('hidden');totalRow.removeAttribute('collapsed');totalRow.removeAttribute('outlineLevel');
+  for(let col=1;col<=6;col++){
+   fluxCell(daySheet,totalRow,col,0);
+   const cell=Array.from(totalRow.children).find(x=>x.getAttribute('r')===fluxColumnName(col)+'23');
+   const value=Array.from(cell.children).find(x=>x.localName==='v');if(value)cell.removeChild(value);
+   const formula=daySheet.createElementNS(fluxNS,'f');formula.textContent=fluxColumnName(col)+'9';cell.insertBefore(formula,cell.firstChild);
+  }
+  // Explicitly clear outline grouping that can collapse the selected row.
+  const sheetPr=daySheet.getElementsByTagNameNS(fluxNS,'sheetPr')[0];
+  const outlinePr=sheetPr?Array.from(sheetPr.children).find(x=>x.localName==='outlinePr'):null;
+  if(outlinePr){outlinePr.setAttribute('showSummaryBelow','1');outlinePr.setAttribute('summaryBelow','1');}
   // Keep only the selected airline's expected-baggage input in the synthesis.
   const head=fluxRow(synth,synth.getElementsByTagNameNS(fluxNS,'sheetData')[0],5);
   for(let j=8;j<22;j++)fluxCell(synth,head,j,j===8?selectedCompany:'');
