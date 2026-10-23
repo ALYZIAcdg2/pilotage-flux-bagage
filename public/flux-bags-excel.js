@@ -494,9 +494,22 @@ export async function exportFluxExcel({dataset,metadata={},period,from,to,compan
   const views=doc.getElementsByTagNameNS(fluxNS,'sheetViews')[0];
   if(views)for(const view of Array.from(views.children).filter(n=>n.localName==='sheetView')){
    view.setAttribute('topLeftCell','A1');
-   let selections=Array.from(view.children).filter(n=>n.localName==='selection');
-   if(!selections.length){const sel=doc.createElementNS(fluxNS,'selection');view.appendChild(sel);selections=[sel];}
-   for(const selection of selections){selection.setAttribute('activeCell','A1');selection.setAttribute('sqref','A1');}
+   // Excel stores the scrolling position of frozen sheets on the pane itself.
+   // Resetting only sheetView and selection leaves the lower pane at row 85.
+   const pane=Array.from(view.children).find(n=>n.localName==='pane');
+   const frozenRows=pane?Math.max(0,Number(pane.getAttribute('ySplit'))||0):0;
+   const frozenCols=pane?Math.max(0,Number(pane.getAttribute('xSplit'))||0):0;
+   const firstScrollable=fluxColumnName(frozenCols)+(frozenRows+1);
+   if(pane){
+    pane.setAttribute('topLeftCell',firstScrollable);
+    pane.setAttribute('activePane',frozenRows&&frozenCols?'bottomRight':frozenRows?'bottomLeft':frozenCols?'topRight':'bottomLeft');
+   }
+   for(const selection of Array.from(view.children).filter(n=>n.localName==='selection'))view.removeChild(selection);
+   const selection=doc.createElementNS(fluxNS,'selection');
+   if(pane)selection.setAttribute('pane',pane.getAttribute('activePane'));
+   selection.setAttribute('activeCell',firstScrollable);
+   selection.setAttribute('sqref',firstScrollable);
+   view.appendChild(selection);
   }
   zip.file(file,serializer.serializeToString(doc));
  }
