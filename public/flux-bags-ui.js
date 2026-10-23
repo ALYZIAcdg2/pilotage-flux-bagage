@@ -767,7 +767,7 @@ $('excelDownload').onclick=async()=>{
  const period=$('excelPeriod').value,from=$('excelFrom').value,to=$('excelTo').value,company=$('excelAirline').value;
  if(!from||(period==='range'&&(!to||to<from))){$('excelStatus').textContent='Vérifiez les dates sélectionnées.';return;}
  const btn=$('excelDownload');btn.disabled=true;$('excelStatus').textContent='Création du fichier Excel en cours…';
- try{const {exportFluxExcel}=await import('/flux-bags-excel.js?v=export-complete-20261016');const result=await exportFluxExcel({dataset,metadata,period,from,to,company});$('excelStatus').textContent='Fichier créé : '+result.name+' · '+result.dossiers+' dossiers.';}
+ try{const {exportFluxExcel}=await import('/flux-bags-excel.js?v=company-scoped-20261023');const result=await exportFluxExcel({dataset,metadata,period,from,to,company});$('excelStatus').textContent='Fichier créé : '+result.name+' · '+result.dossiers+' dossiers.';}
  catch(e){$('excelStatus').textContent='Erreur export Excel : '+e.message;}
  finally{btn.disabled=false;}
 };
