@@ -296,20 +296,28 @@ export async function exportFluxExcel({dataset,metadata={},period,from,to,compan
    for(let j=26;j<=30;j++)fluxCell(recap,rr,j,'');
    if(i>0)rr.setAttribute('hidden','1');else rr.removeAttribute('hidden');
    const dr=fluxRow(daySheet,daySheet.getElementsByTagNameNS(fluxNS,'sheetData')[0],9+i);
-   if(i>0)dr.setAttribute('hidden','1');else dr.removeAttribute('hidden');
+   if(i>0)dr.setAttribute('hidden','1');else {dr.removeAttribute('hidden');dr.removeAttribute('outlineLevel');dr.removeAttribute('collapsed');}
   }
   // Keep the selected airline visible: the template groups rows 9:22.
   const selectedDayRow=fluxRow(daySheet,daySheet.getElementsByTagNameNS(fluxNS,'sheetData')[0],9);
-  selectedDayRow.removeAttribute('hidden');selectedDayRow.removeAttribute('collapsed');
+  selectedDayRow.removeAttribute('hidden');selectedDayRow.removeAttribute('collapsed');selectedDayRow.removeAttribute('outlineLevel');
   selectedDayRow.setAttribute('ht','23');selectedDayRow.setAttribute('customHeight','1');
   fluxCell(daySheet,selectedDayRow,0,selectedCompany);
   // Show the total immediately after the single airline, preserving its formulas.
   const dayTotal=fluxRow(daySheet,daySheet.getElementsByTagNameNS(fluxNS,'sheetData')[0],23);
-  dayTotal.removeAttribute('hidden');dayTotal.removeAttribute('collapsed');
+  dayTotal.removeAttribute('hidden');dayTotal.removeAttribute('collapsed');dayTotal.removeAttribute('outlineLevel');
   // Do not overwrite the B:G daily formulas: they recalculate when C5 changes.
   // Keep only the selected airline's expected-baggage input in the synthesis.
   const head=fluxRow(synth,synth.getElementsByTagNameNS(fluxNS,'sheetData')[0],5);
   for(let j=8;j<22;j++)fluxCell(synth,head,j,j===8?selectedCompany:'');
+ }
+ // All exports (including ALL companies) must reflect the chosen reporting period.
+ if(!selectedCompany){
+  const periodLabel=period==='month'?new Date(from.slice(0,7)+'-01T12:00:00').toLocaleDateString('fr-FR',{month:'long',year:'numeric'}).toUpperCase():period==='day'?fluxDate(from):fluxDate(from)+' AU '+fluxDate(to);
+  const subtitle='COMPTE RENDU DE SUPERVISION  •  '+periodLabel+'  •  TOUTES COMPAGNIES';
+  for(const doc of [recap,dossier,daySheet,synth,base])fluxCell(doc,fluxRow(doc,doc.getElementsByTagNameNS(fluxNS,'sheetData')[0],3),0,subtitle);
+  zip.file('xl/worksheets/sheet2.xml',serializer.serializeToString(dossier));
+  zip.file('xl/worksheets/sheet5.xml',serializer.serializeToString(base));
  }
  const templateCodes=Array.from({length:14},(_,i)=>cellText(recap,'A'+(14+i)).trim().toUpperCase()).filter(Boolean);
  const airlines=selectedCompany?[selectedCompany]:[...new Set([...templateCodes,...allCodes])].filter(code=>allCodes.has(code));
@@ -337,7 +345,8 @@ export async function exportFluxExcel({dataset,metadata={},period,from,to,compan
  for(let i=0;i<31;i++){const dr=fluxRow(daySheet,daySheet.getElementsByTagNameNS(fluxNS,'sheetData')[0],5+i);setExcelDate(daySheet,dr,26,dateOptions[i]);}
  const data=daySheet.getElementsByTagNameNS(fluxNS,'sheetData')[0],chosen=fluxRow(daySheet,data,5);
  const current=Array.from(chosen.children).find(c=>c.getAttribute('r')==='C5');
- if(!current||!dateOptions.some(d=>String(dateSerial(d))===(current.getElementsByTagNameNS(fluxNS,'v')[0]?.textContent||'')))setExcelDate(daySheet,chosen,2,dateOptions[0]);
+ // Never retain C5 from the source template: it may belong to a different month.
+ setExcelDate(daySheet,chosen,2,dateOptions[0]);
  let dvs=daySheet.getElementsByTagNameNS(fluxNS,'dataValidations')[0];
  if(!dvs){dvs=daySheet.createElementNS(fluxNS,'dataValidations');const ext=Array.from(daySheet.documentElement.children).find(x=>['hyperlinks','printOptions','pageMargins','pageSetup','headerFooter','drawing','legacyDrawing','extLst'].includes(x.localName));daySheet.documentElement.insertBefore(dvs,ext||null);}
  for(const v of Array.from(dvs.children))if(v.getAttribute('sqref')==='C5')dvs.removeChild(v);
@@ -368,8 +377,8 @@ export async function exportFluxExcel({dataset,metadata={},period,from,to,compan
  if(relRaw){const relDoc=parser.parseFromString(relRaw,'application/xml');for(const el of Array.from(relDoc.documentElement.children))if((el.getAttribute('Type')||'').endsWith('/calcChain'))el.remove();zip.file(relPath,serializer.serializeToString(relDoc));}
  const typesRaw=await zip.file('[Content_Types].xml')?.async('string');
  if(typesRaw){const typesDoc=parser.parseFromString(typesRaw,'application/xml');for(const el of Array.from(typesDoc.documentElement.children))if(el.getAttribute('PartName')==='/xl/calcChain.xml')el.remove();zip.file('[Content_Types].xml',serializer.serializeToString(typesDoc));}
- // The date chart uses Excel serial dates; show actual dates instead of 46266 etc.
- if(selectedCompany){
+ // Date axis formatting applies to every export, regardless of company filter.
+ {
   const file='xl/charts/chart3.xml';
   if(zip.file(file)){
    const chartDoc=parser.parseFromString(await zip.file(file).async('string'),'application/xml');
@@ -378,6 +387,14 @@ export async function exportFluxExcel({dataset,metadata={},period,from,to,compan
     let fmt=Array.from(axis.children).find(x=>x.localName==='numFmt');
     if(!fmt){fmt=chartDoc.createElementNS(chartNS,'c:numFmt');axis.appendChild(fmt);}
     fmt.setAttribute('formatCode','dd/mm');fmt.setAttribute('sourceLinked','0');
+   }
+   // Category numeric caches must also carry the date format, not Excel serials.
+   for(const cache of Array.from(chartDoc.getElementsByTagNameNS(chartNS,'numCache'))){
+    const parent=cache.parentNode;
+    if(parent?.localName!=='numRef'||parent.parentNode?.localName!=='cat')continue;
+    let format=Array.from(cache.children).find(x=>x.localName==='formatCode');
+    if(!format){format=chartDoc.createElementNS(chartNS,'c:formatCode');cache.insertBefore(format,cache.firstChild);}
+    format.textContent='dd/mm/yyyy';
    }
    zip.file(file,serializer.serializeToString(chartDoc));
   }
