@@ -288,7 +288,9 @@ export async function exportFluxExcel({dataset,metadata={},period,from,to,compan
   // The chart's categories start at AA13, so keep one single series category.
   const header=fluxRow(recap,recap.getElementsByTagNameNS(fluxNS,'sheetData')[0],13);
   fluxCell(recap,header,26,selectedCompany);
-  for(let j=27;j<=30;j++)fluxCell(recap,header,j,0);
+  // Source values for the four stacked status series of chart 1.
+  const selectedStats=stats.get(selectedCompany)||blank();
+  [selectedStats.saved,selectedStats.loaded,selectedStats.notLoaded,selectedStats.cancelled].forEach((value,j)=>fluxCell(recap,header,27+j,value));
   for(let i=0;i<14;i++){
    const rr=fluxRow(recap,recap.getElementsByTagNameNS(fluxNS,'sheetData')[0],14+i);
    for(let j=26;j<=30;j++)fluxCell(recap,rr,j,'');
