@@ -719,18 +719,8 @@ export async function exportFluxExcel({dataset,metadata={},period,from,to,compan
  }
  // Keep chart XML intact and avoid dynamic regular expressions in the export path.
  // Chart labels are handled separately from the workbook data.
- // Clear stale chart caches from the original all-airlines workbook. Excel will
- // rebuild each chart from the company-filtered sheet data on opening.
- if(selectedCompany){
-  for(const file of Object.keys(zip.files).filter(name=>name.startsWith('xl/charts/chart')&&name.endsWith('.xml'))){
-   const raw=await zip.file(file).async('string'),chartDoc=parser.parseFromString(raw,'application/xml');
-   if(chartDoc.getElementsByTagName('parsererror').length)throw new Error('Graphique Excel invalide : '+file);
-   for(const node of Array.from(chartDoc.getElementsByTagName('*'))){
-    if(['numCache','strCache','multiLvlStrCache'].includes(node.localName))node.parentNode?.removeChild(node);
-   }
-   zip.file(file,serializer.serializeToString(chartDoc));
-  }
- }
+ // Preserve embedded chart caches and drawing relationships from the official template.
+ // Removing chart caches caused Excel to display blank/missing charts.
  const buffer=await zip.generateAsync({type:'arraybuffer',compression:'DEFLATE',compressionOptions:{level:6}});
  const name='FLUX_BAGAGES_SUPERVISION_'+(period==='range'?from+'_au_'+to:period==='month'?from.slice(0,7):from)+'_'+(company||'TOUTES')+'.xlsx';
  download(buffer,name);
