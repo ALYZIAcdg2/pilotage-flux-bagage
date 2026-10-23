@@ -641,7 +641,7 @@ export async function exportFluxExcel({dataset,metadata={},period,from,to,compan
      const val=formula.textContent||'';
      if(val.includes('SYNTHÈSE PAR DATE')){
       const parts=val.split(':');if(parts.length===2){
-       const lastPart=parts[1];const match=lastPart.match(/^(\\$?[A-Z]+\\$?)([0-9]+)$/);
+       const lastPart=parts[1];const match=lastPart.match(/^([$]?[A-Z]+[$]?)([0-9]+)$/);
        if(match&&Number(match[2])>last){formula.textContent=parts[0]+':'+match[1]+last;modified=true;}
       }
      }
